@@ -36,7 +36,15 @@ header h1 { font-size: 22px; font-weight: 650; margin: 0 0 4px; letter-spacing: 
 header .sub { color: var(--ink-2); }
 header .sub b { color: var(--ink); font-weight: 600; }
 .theme-btn { float: right; background: none; border: 1px solid var(--border); color: var(--ink-2); border-radius: 8px; padding: 4px 10px; cursor: pointer; font: inherit; font-size: 12px; }
-nav.tabs { display: flex; gap: 4px; margin: 20px 0 16px; overflow-x: auto; border-bottom: 1px solid var(--grid); scrollbar-width: thin; align-items: flex-end; }
+nav.mtabs { display: flex; gap: 8px; margin: 20px 0 0; overflow-x: auto; scrollbar-width: none; }
+nav.mtabs button { flex: none; font: inherit; font-size: 15px; font-weight: 600; color: var(--ink-2); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 7px 16px; cursor: pointer; white-space: nowrap; }
+nav.mtabs button:hover { color: var(--ink); }
+nav.mtabs button[aria-selected="true"] { background: var(--ink); color: var(--page); border-color: var(--ink); }
+nav.mtabs .n { font-weight: 400; font-size: 12px; opacity: .7; margin-left: 6px; }
+@media (max-width: 480px) { nav.mtabs { gap: 6px; } nav.mtabs button { font-size: 14px; padding: 6px 12px; } nav.mtabs .n { display: none; } }
+nav.tabs[hidden] { display: none; }
+#panels { margin-top: 16px; }
+nav.tabs { display: flex; gap: 4px; margin: 10px 0 0; overflow-x: auto; border-bottom: 1px solid var(--grid); scrollbar-width: thin; align-items: flex-end; }
 nav.tabs button { flex: none; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--ink-2); font: inherit; font-weight: 550; padding: 8px 12px 10px; cursor: pointer; white-space: nowrap; }
 nav.tabs button:hover { color: var(--ink); }
 nav.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
@@ -120,7 +128,8 @@ footer a { color: var(--accent); overflow-wrap: anywhere; }
     <div class="sub" id="sub"></div>
     <div class="controls" id="weeks" style="margin:10px 0 0" hidden></div>
   </header>
-  <nav class="tabs" id="tabs" role="tablist"></nav>
+  <nav class="mtabs" id="mtabs" role="tablist" aria-label="Market"></nav>
+  <div id="subnavs"></div>
   <main id="panels"></main>
   <footer id="foot"></footer>
 </div>
@@ -460,40 +469,64 @@ if (D.archive && D.archive.length > 1) {
   wk.querySelector("select").onchange = e => { const d = e.target.value; location.href = (d === latest ? "index.html" : d + ".html") + location.hash; };
 }
 
-// ---------- tabs ----------
+// ---------- tabs: market row (Electricity / Natural gas / All), then a section row ----------
+const slug = s => s.toLowerCase().replace(/[^a-z]/g, "");
 const REGIONS = E ? REGION_ORDER.filter(r => E.contracts.some(c => c.region === r)) : [];
+const GROUPS = G ? GAS_ORDER.filter(g => G.contracts.some(c => c.region === g)) : [];
+const SECTIONS = [];
+if (E) SECTIONS.push({ id: "electricity", label: "Electricity", n: E.contracts.length,
+  tabs: [{ id: "overview", label: "Overview" }, ...REGIONS.map(r => ({ id: slug(r), label: r, region: r, n: E.contracts.filter(c => c.region === r).length }))] });
+if (G) SECTIONS.push({ id: "natgas", label: "Natural gas", n: G.contracts.length,
+  tabs: [{ id: "overview", label: "Overview" }, ...GROUPS.map(g => ({ id: slug(g), label: g, region: g, n: G.contracts.filter(c => c.region === g).length }))] });
+SECTIONS.push({ id: "all", label: "All contracts", n: ALL.length, tabs: [{ id: "table", label: "All contracts" }] });
 const TABS = [];
-if (E) {
-  TABS.push({ id: "overview", label: "Power overview" });
-  for (const r of REGIONS) TABS.push({ id: r.toLowerCase().replace(/[^a-z]/g, ""), label: r, region: r, n: E.contracts.filter(c => c.region === r).length });
+const mnav = document.getElementById("mtabs"), subnavs = document.getElementById("subnavs"), panels = document.getElementById("panels");
+for (const s of SECTIONS) {
+  const mb = el("button", { role: "tab", "aria-selected": "false", id: "m-" + s.id, type: "button" }, esc(s.label) + `<span class="n">${s.n}</span>`);
+  mb.onclick = () => select(s.id + "/" + (s.cur || s.tabs[0].id), true);
+  mnav.appendChild(mb);
+  s.nav = el("nav", { class: "tabs", role: "tablist", "aria-label": s.label + " sections", hidden: "" });
+  if (s.tabs.length > 1) subnavs.appendChild(s.nav);
+  for (const t of s.tabs) {
+    t.section = s.id; t.key = s.id + "/" + t.id;
+    t.btn = el("button", { role: "tab", "aria-selected": "false", "aria-controls": "p-" + s.id + "-" + t.id, type: "button" }, esc(t.label) + (t.n ? `<span class="n">${t.n}</span>` : ""));
+    t.btn.onclick = () => select(t.key, true);
+    s.nav.appendChild(t.btn);
+    t.panel = el("section", { class: "panel", id: "p-" + s.id + "-" + t.id, role: "tabpanel", hidden: "" });
+    panels.appendChild(t.panel);
+    TABS.push(t);
+  }
 }
-if (G) TABS.push({ id: "natgas", label: "Natural gas", n: G.contracts.length, sep: !!E });
-TABS.push({ id: "all", label: "All contracts", n: ALL.length, sep: true });
-const nav = document.getElementById("tabs"), panels = document.getElementById("panels");
-for (const t of TABS) {
-  if (t.sep) nav.appendChild(el("span", { class: "sep", "aria-hidden": "true" }));
-  const b = el("button", { role: "tab", "aria-selected": "false", "aria-controls": "p-" + t.id, id: "t-" + t.id, type: "button" }, esc(t.label) + (t.n ? `<span class="n">${t.n}</span>` : ""));
-  b.onclick = () => select(t.id, true);
-  nav.appendChild(b);
-  t.panel = el("section", { class: "panel", id: "p-" + t.id, role: "tabpanel", "aria-labelledby": "t-" + t.id, hidden: "" });
-  panels.appendChild(t.panel);
+const tab = key => TABS.find(t => t.key === key);
+// Older single-level links (#pjm, #natgas, #all) still land in the right place.
+function resolve(h) {
+  if (tab(h)) return h;
+  const s = SECTIONS.find(s => s.id === h);
+  if (s) return s.id + "/" + s.tabs[0].id;
+  if (tab("electricity/" + h)) return "electricity/" + h;
+  return TABS[0].key;
 }
-const tab = id => TABS.find(t => t.id === id);
-function select(id, push) {
-  if (!tab(id)) id = TABS[0].id;
+function select(key, push) {
+  const cur = tab(resolve(key));
+  for (const s of SECTIONS) {
+    const on = s.id === cur.section;
+    document.getElementById("m-" + s.id).setAttribute("aria-selected", on);
+    s.nav.hidden = !on;
+    if (on) s.cur = cur.id;
+  }
   for (const t of TABS) {
-    const on = t.id === id;
-    document.getElementById("t-" + t.id).setAttribute("aria-selected", on);
+    const on = t === cur;
+    t.btn.setAttribute("aria-selected", on);
     t.panel.hidden = !on;
     if (on && !t.built) { t.build(t.panel); t.built = true; }
   }
-  if (push) history.replaceState(null, "", "#" + id);
+  if (push) history.replaceState(null, "", "#" + cur.key);
   hideTip();
   renderVisible(false);
 }
 
 // ---------- Power overview ----------
-if (E) tab("overview").build = p => {
+if (E) tab("electricity/overview").build = p => {
   const C = E.contracts, hasPrev = !!E.prevDate;
   const oiDelta = hasPrev ? sum(C, c => c.oiChg) : null;
   const top = [...C].sort(byOI)[0];
@@ -536,7 +569,7 @@ if (E) tab("overview").build = p => {
 };
 
 // ---------- Region tabs ----------
-for (const t of TABS.filter(t => t.region)) {
+for (const t of TABS.filter(t => t.section === "electricity" && t.region)) {
   t.build = p => {
     const cs = E.contracts.filter(c => c.region === t.region), hasPrev = !!E.prevDate;
     p.appendChild(el("div", { class: "tiles" }, [
@@ -553,9 +586,16 @@ for (const t of TABS.filter(t => t.region)) {
 }
 
 // ---------- Natural gas ----------
-if (G) tab("natgas").build = p => {
-  const C = G.contracts, hasPrev = !!G.prevDate;
-  const groups = GAS_ORDER.filter(g => C.some(c => c.region === g));
+const GAS_NOTES = {
+  "Henry Hub": "Henry Hub benchmark contracts. NYMEX is 10,000 MMBtu per contract, ICE mostly 2,500, so compare positions within a contract.",
+  "Basis": "Regional hub price minus Henry Hub. Net long = positioned for the hub to strengthen against Henry Hub.",
+  "Index": "Regional hub index (fixed-price) contracts.",
+  "Other": "Other regional gas contracts.",
+  "NGLs": "Natural gas liquids (propane, butane, ethane, natural gasoline). Units are gallons or metric tonnes, not MMBtu."
+};
+const sizeOf = c => { const m = /(\d[\d,]*)/.exec(c.unit || ""); return m ? m[1].replace(/,/g, "") : null; };
+if (G) tab("natgas/overview").build = p => {
+  const C = G.contracts;
   // The benchmark: NYMEX Henry Hub natural gas (CFTC code 023651), else the largest Henry Hub contract.
   const hh = byCode["023651"] || [...C].filter(c => c.region === "Henry Hub").sort(byOI)[0] || [...C].sort(byOI)[0];
   const nNGL = C.filter(c => c.region === "NGLs").length;
@@ -582,38 +622,45 @@ if (G) tab("natgas").build = p => {
     stack.appendChild(g2);
   }
 
-  // Group switch drives everything below it.
-  let group = groups.includes("Henry Hub") ? "Henry Hub" : groups[0];
-  const list = () => C.filter(c => c.region === group);
-  const ctr = el("div", { class: "controls", style: "margin:4px 0 0" }, `<label>Contract group</label>`);
-  const seg = el("div", { class: "seg", role: "group", "aria-label": "Contract group" });
-  const below = el("div", { class: "stack" });
-  const notes = { "Henry Hub": "Henry Hub benchmark contracts. NYMEX is 10,000 MMBtu per contract, ICE mostly 2,500.", "Basis": "Regional hub price minus Henry Hub. Net long = betting the hub strengthens vs Henry Hub.", "Index": "Regional hub index (fixed-price) contracts.", "Other": "Other regional gas contracts.", "NGLs": "Natural gas liquids (propane, butane, ethane, natural gasoline). Units are gallons or metric tonnes, not MMBtu." };
-  const groupNote = el("p", { class: "hint", style: "margin:-4px 0 0" });
-  for (const g of groups) {
-    const b = el("button", { type: "button", "aria-pressed": g === group, "data-g": g }, `${esc(g)} <span class="n">${C.filter(c => c.region === g).length}</span>`);
-    b.onclick = () => setGroup(g);
-    seg.appendChild(b);
-  }
-  ctr.appendChild(seg);
-  stack.append(ctr, groupNote, below);
-  below.appendChild(chartCard("Largest contracts by open interest", "Long side of open interest, split by who holds it. Hover a bar for the breakdown.", w => stackedBars(w, oiRows(list()))));
-  below.appendChild(positioningCard(list, "Pick a trader category. Left: net position as a share of each market's open interest. Right: the biggest net changes this week."));
-  const sec = cardsSection(list);
-  below.appendChild(sec.el);
-  function setGroup(g) {
-    group = g;
-    seg.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.g === g));
-    groupNote.textContent = notes[g] || "";
-    sec.draw();
-    renderVisible(true);
-  }
-  tab("natgas").setGroup = setGroup;
-  setGroup(group);
+  const gasOnly = C.filter(c => c.region !== "NGLs");
+  const grpRows = GROUPS.filter(g => g !== "NGLs").map(g => {
+    const cs = C.filter(c => c.region === g), oi = sum(cs, c => c.oi);
+    const segs = CATS.map(k => ({ k: k.k, v: sum(cs, c => longSide(c, k.k)) }));
+    let t = `<div class="t">${esc(g)} · ${cs.length} contracts</div>` + row("Open interest", fmt(oi));
+    if (G.prevDate) { const d = sum(cs, c => c.oiChg); t += row("Change vs " + shortDate(G.prevDate), `<span class="${dcls(d)}">${sgn(d)}</span>`); }
+    t += "<hr>" + segs.map(s => row(CATS.find(k => k.k === s.k).label, `${fmt(s.v)} · ${pct(s.v / oi * 100)}`, s.k)).join("");
+    return { label: g, segs, total: oi, tip: t };
+  }).sort((a, b) => b.total - a.total);
+  stack.appendChild(chartCard("Open interest by contract group", "Natural gas only (NGLs have their own tab). Long side of open interest, split by who holds it.", w => stackedBars(w, grpRows, { labelW: 120 })));
+  stack.appendChild(chartCard("Largest 15 gas contracts by open interest", "Contract sizes differ (NYMEX 10,000 MMBtu, ICE mostly 2,500), so compare within a contract.", w => stackedBars(w, oiRows(gasOnly))));
+  stack.appendChild(positioningCard(() => gasOnly, "All natural gas contracts, NGLs excluded. Left: net position as a share of each market's open interest. Right: the biggest net changes this week."));
 };
 
+// ---------- Natural gas group tabs ----------
+for (const t of TABS.filter(t => t.section === "natgas" && t.region)) {
+  t.build = p => {
+    const cs = G.contracts.filter(c => c.region === t.region), hasPrev = !!G.prevDate;
+    const mixed = new Set(cs.map(sizeOf).filter(Boolean)).size > 1;
+    p.appendChild(el("p", { class: "hint", style: "margin:0 0 8px" }, GAS_NOTES[t.region] || ""));
+    p.appendChild(el("div", { class: "tiles" }, [
+      tile("Open interest", compact(sum(cs, c => c.oi)), (hasPrev ? delta(sum(cs, c => c.oiChg), "vs " + shortDate(G.prevDate)) : "") + (mixed ? (hasPrev ? " · " : "") + "mixed contract sizes" : "")),
+      tile("Producer/Merchant net", sgn(sum(cs, c => net(c, "pm"))), delta(sum(cs, c => netChg(c, "pm")), "on the week")),
+      tile("Managed money net", sgn(sum(cs, c => net(c, "mm"))), delta(sum(cs, c => netChg(c, "mm")), "on the week")),
+      tile("Contracts", cs.length, `${new Set(cs.map(c => exShort(c.exchange))).size > 1 ? "ICE and NYMEX" : esc(exShort(cs[0].exchange))}`)
+    ].join("")));
+    const stack = el("div", { class: "stack", style: "margin-top:16px" });
+    p.appendChild(stack);
+    stack.appendChild(chartCard("Largest contracts by open interest", "Long side of open interest, split by who holds it. Hover a bar for the breakdown.", w => stackedBars(w, oiRows(cs))));
+    stack.appendChild(positioningCard(() => cs, "Pick a trader category. Left: net position as a share of each market's open interest. Right: the biggest net changes this week."));
+    const sec = cardsSection(() => cs);
+    stack.appendChild(sec.el);
+    t.cards = sec;
+    sec.draw();
+  };
+}
+
 // ---------- All contracts ----------
-tab("all").build = p => {
+tab("all/table").build = p => {
   const groups = [...new Set(ALL.map(c => c.region))];
   const ctr = el("div", { class: "controls" });
   ctr.innerHTML = `<input type="search" placeholder="Search contracts" aria-label="Search contracts">` +
@@ -659,15 +706,9 @@ tab("all").build = p => {
   draw();
 };
 function openContract(code) {
-  const c = byCode[code];
-  if (c.market === "natgas") {
-    select("natgas", true);
-    tab("natgas").setGroup(c.region);
-  } else {
-    const t = TABS.find(t => t.region === c.region);
-    select(t.id, true);
-    t.cards.clearFilter();
-  }
+  const c = byCode[code], t = tab(c.market + "/" + slug(c.region));
+  select(t.key, true);
+  t.cards.clearFilter();
   const card = document.getElementById("c-" + code);
   card.scrollIntoView({ behavior: "smooth", block: "center" });
   card.classList.add("flash"); setTimeout(() => card.classList.remove("flash"), 1800);
@@ -691,7 +732,7 @@ document.getElementById("themeBtn").onclick = () => {
   r.dataset.theme = dark ? "light" : "dark";
 };
 
-select((location.hash || "#" + TABS[0].id).slice(1), false);
+select(decodeURIComponent(location.hash.slice(1)), false);
 </script>
 </body>
 </html>
