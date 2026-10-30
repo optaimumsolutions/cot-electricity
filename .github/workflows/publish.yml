@@ -37,7 +37,7 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add data
-            git commit -m "data: COT report $(ls data | sort | tail -1 | cut -d. -f1)"
+            git commit -m "data: COT reports $(ls data/*/ | grep json | sort | tail -1 | cut -d. -f1)"
             git push
           else
             echo "No new report this run."

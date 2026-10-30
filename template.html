@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Electricity COT Report</title>
+<title>Power &amp; Gas COT Report</title>
 <style>
 :root {
   color-scheme: light;
@@ -36,15 +36,16 @@ header h1 { font-size: 22px; font-weight: 650; margin: 0 0 4px; letter-spacing: 
 header .sub { color: var(--ink-2); }
 header .sub b { color: var(--ink); font-weight: 600; }
 .theme-btn { float: right; background: none; border: 1px solid var(--border); color: var(--ink-2); border-radius: 8px; padding: 4px 10px; cursor: pointer; font: inherit; font-size: 12px; }
-nav.tabs { display: flex; gap: 4px; margin: 20px 0 16px; overflow-x: auto; border-bottom: 1px solid var(--grid); scrollbar-width: thin; }
+nav.tabs { display: flex; gap: 4px; margin: 20px 0 16px; overflow-x: auto; border-bottom: 1px solid var(--grid); scrollbar-width: thin; align-items: flex-end; }
 nav.tabs button { flex: none; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--ink-2); font: inherit; font-weight: 550; padding: 8px 12px 10px; cursor: pointer; white-space: nowrap; }
 nav.tabs button:hover { color: var(--ink); }
 nav.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
 nav.tabs .n { color: var(--muted); font-weight: 400; margin-left: 4px; font-size: 12px; }
+nav.tabs .sep { flex: none; width: 1px; align-self: stretch; background: var(--grid); margin: 8px 6px 10px; }
 .panel[hidden] { display: none; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; min-width: 0; }
 .card h2 { font-size: 15px; font-weight: 620; margin: 0 0 2px; }
-.card .hint { color: var(--muted); font-size: 12px; margin: 0 0 12px; }
+.card .hint, .hint { color: var(--muted); font-size: 12px; margin: 0 0 12px; }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 16px; }
 .stack { display: grid; gap: 16px; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 12px; }
@@ -63,6 +64,7 @@ nav.tabs .n { color: var(--muted); font-weight: 400; margin-left: 4px; font-size
 .seg button { background: none; border: 0; color: var(--ink-2); font: inherit; font-size: 12px; padding: 5px 10px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
 .seg button + button { border-left: 1px solid var(--border); }
 .seg button[aria-pressed="true"] { background: var(--wash); color: var(--ink); font-weight: 600; }
+.seg .n { color: var(--muted); font-weight: 400; }
 select, input[type="search"] { font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; }
 input[type="search"] { width: min(100%, 280px); }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 12px; }
@@ -80,7 +82,7 @@ svg .num { font-variant-numeric: tabular-nums; }
 .gl { stroke: var(--grid); stroke-width: 1; }
 .ax { stroke: var(--axis); stroke-width: 1; }
 .f-pm { fill: var(--c-pm); } .f-swap { fill: var(--c-swap); } .f-mm { fill: var(--c-mm); } .f-other { fill: var(--c-other); } .f-nr { fill: var(--c-nr); }
-.s-pm { stroke: var(--c-pm); } .s-mm { stroke: var(--c-mm); }
+.s-pm { stroke: var(--c-pm); } .s-swap { stroke: var(--c-swap); } .s-mm { stroke: var(--c-mm); } .s-other { stroke: var(--c-other); }
 .hit { fill: transparent; cursor: default; }
 .hit:hover { fill: var(--wash); }
 .tblwrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
@@ -106,7 +108,7 @@ footer { margin-top: 28px; color: var(--ink-2); font-size: 12px; }
 footer dl { display: grid; grid-template-columns: minmax(120px, auto) 1fr; gap: 4px 12px; margin: 8px 0 12px; }
 footer dt { color: var(--ink); font-weight: 600; }
 footer dd { margin: 0; }
-footer a { color: var(--accent); }
+footer a { color: var(--accent); overflow-wrap: anywhere; }
 @media print { nav.tabs, .theme-btn, .controls { display: none; } .panel[hidden] { display: block; } }
 </style>
 </head>
@@ -114,7 +116,7 @@ footer a { color: var(--accent); }
 <div class="wrap">
   <header>
     <button class="theme-btn" id="themeBtn" type="button">Theme</button>
-    <h1>Electricity: Commitments of Traders</h1>
+    <h1 id="title">Commitments of Traders</h1>
     <div class="sub" id="sub"></div>
     <div class="controls" id="weeks" style="margin:10px 0 0" hidden></div>
   </header>
@@ -134,11 +136,13 @@ const CATS = [
   { k: "nr", label: "Non-reportable", short: "Non-rept" }
 ];
 const TRADERS = CATS.slice(0, 4);
+const MARKET_LABEL = { electricity: "Electricity", natgas: "Natural gas" };
 const REGION_ORDER = ["PJM", "ERCOT", "West", "MISO", "NYISO", "ISO-NE", "Other"];
-const C = D.contracts;
-const byCode = Object.fromEntries(C.map(c => [c.code, c]));
-const REGIONS = REGION_ORDER.filter(r => C.some(c => c.region === r));
-const hasPrev = !!D.prevDate;
+const GAS_ORDER = ["Henry Hub", "Basis", "Index", "Other", "NGLs"];
+const M = D.markets, E = M.electricity, G = M.natgas;
+for (const [m, p] of Object.entries(M)) p.contracts.forEach(c => { c.market = m; });
+const ALL = Object.values(M).flatMap(p => p.contracts);
+const byCode = Object.fromEntries(ALL.map(c => [c.code, c]));
 
 // ---------- formatting ----------
 const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
@@ -156,7 +160,7 @@ function compact(n) {
 const dcls = n => n > 0 ? "up" : n < 0 ? "down" : "";
 const longDate = iso => iso ? new Date(iso + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "—";
 const shortDate = iso => new Date(iso + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
-const exShort = e => /NODAL/i.test(e) ? "Nodal" : /ICE/i.test(e) ? "ICE" : e;
+const exShort = e => /NODAL/i.test(e) ? "Nodal" : /ICE/i.test(e) ? "ICE" : /NEW YORK MERC/i.test(e) ? "NYMEX" : e;
 
 // ---------- derived values ----------
 const v0 = x => x == null ? 0 : x;
@@ -164,9 +168,11 @@ const net = (c, k) => v0(c.pos[k].l) - v0(c.pos[k].s);
 const netPct = (c, k) => c.oi ? net(c, k) / c.oi * 100 : 0;
 const netChg = (c, k) => c.chg && c.chg[k] ? v0(c.chg[k].l) - v0(c.chg[k].s) : null;
 const sum = (arr, f) => arr.reduce((a, x) => a + v0(f(x)), 0);
+const byOI = (a, b) => b.oi - a.oi;
+const longSide = (c, k) => v0(c.pos[k].l) + v0(c.pos[k].sp);
 
 // ---------- tooltip ----------
-let TIPS = [];
+const TIPS = [];
 const tip = html => TIPS.push(html) - 1;
 const tipEl = document.getElementById("tip");
 const swatch = k => `<span class="sw" style="background:var(--c-${k})"></span>`;
@@ -190,10 +196,7 @@ document.addEventListener("scroll", hideTip, true);
 function contractTip(c) {
   let h = `<div class="t">${esc(c.name)}</div>` + row("Open interest", fmt(c.oi) + (c.oiChg != null ? ` <span class="${dcls(c.oiChg)}">(${sgn(c.oiChg)})</span>` : ""));
   h += "<hr>" + row("<i>Long side</i>", "contracts · % OI");
-  for (const k of CATS) {
-    const l = v0(c.pos[k.k].l) + v0(c.pos[k.k].sp);
-    h += row(k.label, `${fmt(l)} · ${pct(l / c.oi * 100)}`, k.k);
-  }
+  for (const k of CATS) h += row(k.label, `${fmt(longSide(c, k.k))} · ${pct(longSide(c, k.k) / c.oi * 100)}`, k.k);
   return h;
 }
 
@@ -224,6 +227,7 @@ function fitText(s, px) { // trim a label to roughly fit px at 11px font
 
 // Stacked horizontal bars: rows = [{label, segs:[{k,v}], total, tip}]
 function stackedBars(w, rows, opt = {}) {
+  if (!rows.length) return `<div class="empty">Nothing to show.</div>`;
   const narrow = w < 560, bh = 16;
   const labelW = narrow ? 0 : Math.min(opt.labelW || 250, w * 0.38);
   const valW = 52, x0 = labelW, x1 = w - valW;
@@ -255,7 +259,7 @@ function stackedBars(w, rows, opt = {}) {
 
 // Diverging horizontal bars around zero: rows = [{label, v, tip}]
 function divergingBars(w, rows, opt) {
-  if (!rows.length) return `<div class="empty">No contracts with a position in this category.</div>`;
+  if (!rows.length) return `<div class="empty">No contracts with a position change in this category.</div>`;
   const narrow = w < 560, bh = 14;
   const labelW = narrow ? 0 : Math.min(230, w * 0.36);
   const pad = 46, x0 = labelW + pad, x1 = w - pad;
@@ -314,16 +318,16 @@ function butterfly(w, c) {
 // Single-series line with crosshair: pts = [{x: label, v}]
 const LINES = [];
 function lineChart(w, pts, opt) {
-  const h = 220, l = 48, r = 16, t = 12, b = 26;
-  const vs = pts.map(p => p.v), lo0 = Math.min(...vs), hi0 = Math.max(...vs);
-  const ticks = niceTicks(lo0 - (hi0 - lo0) * 0.1, hi0 + (hi0 - lo0) * 0.05, 4);
+  const h = 220, l = 52, r = 16, t = 12, b = 26;
+  const vs = pts.map(p => p.v), lo0 = Math.min(...vs), hi0 = Math.max(...vs), span = (hi0 - lo0) || Math.abs(hi0) || 1;
+  const ticks = niceTicks(lo0 - span * 0.1, hi0 + span * 0.05, 4);
   const y0 = ticks[0], y1 = ticks[ticks.length - 1];
   const sx = i => l + (pts.length === 1 ? 0.5 : i / (pts.length - 1)) * (w - l - r);
   const sy = v => t + (1 - (v - y0) / (y1 - y0 || 1)) * (h - t - b);
   let s = "";
-  for (const tk of ticks) s += `<line class="gl" x1="${l}" x2="${w - r}" y1="${sy(tk)}" y2="${sy(tk)}"/><text class="mut num" x="${l - 8}" y="${sy(tk) + 4}" text-anchor="end">${compact(tk)}</text>`;
+  for (const tk of ticks) s += `<line class="${tk === 0 ? "ax" : "gl"}" x1="${l}" x2="${w - r}" y1="${sy(tk)}" y2="${sy(tk)}"/><text class="mut num" x="${l - 8}" y="${sy(tk) + 4}" text-anchor="end">${compact(tk)}</text>`;
   const every = Math.ceil(pts.length / Math.max(2, Math.floor((w - l - r) / 64)));
-  pts.forEach((p, i) => { if (i % every === 0 || i === pts.length - 1) s += `<text class="mut" x="${sx(i)}" y="${h - 6}" text-anchor="middle">${esc(p.x)}</text>`; });
+  pts.forEach((p, i) => { if ((i % every === 0 && pts.length - 1 - i >= every * 0.6) || i === pts.length - 1) s += `<text class="mut" x="${sx(i)}" y="${h - 6}" text-anchor="middle">${esc(p.x)}</text>`; });
   s += `<path d="${pts.map((p, i) => (i ? "L" : "M") + sx(i) + "," + sy(p.v)).join("")}" fill="none" class="s-${opt.k}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
   const last = pts.length - 1;
   s += `<circle cx="${sx(last)}" cy="${sy(pts[last].v)}" r="4.5" class="f-${opt.k}" stroke="var(--surface)" stroke-width="2"/>`;
@@ -359,13 +363,93 @@ function renderVisible(force) {
 let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => renderVisible(false), 120); });
 const el = (tag, attrs = {}, html = "") => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); e.innerHTML = html; return e; };
 const legendHTML = cats => `<div class="legend">${cats.map(k => `<span>${swatch(k.k)}${k.label}</span>`).join("")}</div>`;
+const tile = (lab, val, d, small) => `<div class="card tile"><div class="lab">${lab}</div><div class="val${small ? " sm" : ""}">${val}</div><div class="d">${d}</div></div>`;
+const delta = (n, what) => n == null ? "" : `<span class="${dcls(n)}">${sgn(n)}</span> ${what}`;
+
+// ---------- reusable sections ----------
+function chartCard(title, hint, render, withLegend = true) {
+  const card = el("div", { class: "card" }, `<h2>${title}</h2><p class="hint">${hint}</p>${withLegend ? legendHTML(CATS) : ""}`);
+  const box = el("div"); card.appendChild(box);
+  mount(box, render);
+  return card;
+}
+const oiRows = list => [...list].sort(byOI).slice(0, 15).map(c => ({
+  label: c.name, total: c.oi, tip: contractTip(c), segs: CATS.map(k => ({ k: k.k, v: longSide(c, k.k) }))
+}));
+
+function positioningCard(listFn, hint) {
+  let cat = "mm";
+  const card = el("div", { class: "card" }, `<h2>Who is long, who is short</h2><p class="hint">${hint}</p>`);
+  const ctr = el("div", { class: "controls" }, `<label>Trader category</label>`);
+  const seg = el("div", { class: "seg", role: "group", "aria-label": "Trader category" });
+  for (const k of TRADERS) {
+    const b = el("button", { type: "button", "aria-pressed": k.k === cat }, swatch(k.k) + k.label);
+    b.onclick = () => { cat = k.k; seg.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); renderVisible(true); };
+    seg.appendChild(b);
+  }
+  ctr.appendChild(seg); card.appendChild(ctr);
+  const g2 = el("div", { class: "grid2" });
+  const left = el("div"), right = el("div");
+  const colL = el("div", {}, `<div class="hint" style="margin-bottom:6px">Net % of open interest, 20 largest markets</div>`);
+  const colR = el("div", {}, `<div class="hint" style="margin-bottom:6px">Biggest net changes this week, contracts</div>`);
+  colL.appendChild(left); colR.appendChild(right); g2.append(colL, colR); card.appendChild(g2);
+  const lab = () => TRADERS.find(k => k.k === cat).label;
+  mount(left, w => divergingBars(w, [...listFn()].sort(byOI).slice(0, 20).map(c => ({
+    label: c.name, v: netPct(c, cat),
+    tip: `<div class="t">${esc(c.name)}</div>` + row(lab() + " net", `<b>${sgn(net(c, cat))}</b>`, cat) + row("Share of open interest", sgnPct(netPct(c, cat))) + row("Open interest", fmt(c.oi))
+  })), { k: cat, tick: t => t + "%", val: v => sgnPct(v) }));
+  mount(right, w => divergingBars(w, listFn().filter(c => netChg(c, cat)).sort((a, b) => Math.abs(netChg(b, cat)) - Math.abs(netChg(a, cat))).slice(0, 15).map(c => ({
+    label: c.name, v: netChg(c, cat),
+    tip: `<div class="t">${esc(c.name)}</div>` + row(lab() + " net, now", `<b>${sgn(net(c, cat))}</b>`, cat) + row("Change on the week", `<span class="${dcls(netChg(c, cat))}">${sgn(netChg(c, cat))}</span>`) + row("Long change", sgn(c.chg[cat].l)) + row("Short change", sgn(c.chg[cat].s))
+  })), { k: cat, tick: compact, val: sgn }));
+  return card;
+}
+
+const CARD_CACHE = new Map();
+function contractCard(c) {
+  if (CARD_CACHE.has(c.code)) return CARD_CACHE.get(c.code);
+  const card = el("article", { class: "card ct", id: "c-" + c.code });
+  const oiD = c.oiChg != null ? ` <span class="${dcls(c.oiChg)}">${sgn(c.oiChg)}</span>` : "";
+  const tags = [exShort(c.exchange), c.market === "natgas" ? c.region : null, c.period, c.tenor, c.unit].filter(Boolean);
+  card.innerHTML = `<h3>${esc(c.name)}</h3>
+    <div class="tags">${tags.map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>
+    <div class="meta"><span>Open interest <b>${fmt(c.oi)}</b>${oiD}</span><span>Traders <b>${c.traders ?? "—"}</b></span><span>Code ${esc(c.code)}</span></div>`;
+  const chart = el("div"); card.appendChild(chart);
+  mount(chart, w => butterfly(w, c));
+  CARD_CACHE.set(c.code, card);
+  return card;
+}
+// Card grid with its own sort (and optional peak/off-peak filter). Returns {el, draw}.
+function cardsSection(listFn, { periodFilter } = {}) {
+  const wrap = el("div");
+  const ctr = el("div", { class: "controls" });
+  ctr.innerHTML = `<label>Sort</label><select aria-label="Sort contracts"><option value="oi">Open interest</option><option value="name">Name</option><option value="mm">Managed money net % OI</option><option value="chg">Biggest weekly move</option></select>` +
+    (periodFilter ? `<label>Show</label><select aria-label="Peak or off-peak"><option value="">All</option><option value="Peak">Peak</option><option value="Off-peak">Off-peak</option></select>` : "");
+  wrap.appendChild(ctr);
+  wrap.appendChild(el("div", {}, legendHTML(CATS) + `<p class="hint" style="margin:-2px 0 12px">Bars: outright short (left) and long (right) positions. Hover a row for spreading, % of OI and trader counts.</p>`));
+  const grid = el("div", { class: "cards" }); wrap.appendChild(grid);
+  const [sortSel, perSel] = ctr.querySelectorAll("select");
+  const move = c => Math.max(...TRADERS.map(k => Math.abs(netChg(c, k.k) || 0)));
+  const draw = () => {
+    const by = sortSel.value, f = perSel ? perSel.value : "";
+    const list = listFn().filter(c => !f || c.period === f).sort(
+      by === "name" ? (a, b) => a.name.localeCompare(b.name) :
+      by === "mm" ? (a, b) => netPct(b, "mm") - netPct(a, "mm") :
+      by === "chg" ? (a, b) => move(b) - move(a) : byOI);
+    grid.replaceChildren(...list.map(contractCard));
+    renderVisible(false);
+  };
+  ctr.querySelectorAll("select").forEach(s => s.onchange = draw);
+  return { el: wrap, draw, clearFilter: () => { if (perSel && perSel.value) { perSel.value = ""; draw(); } } };
+}
 
 // ---------- header ----------
+document.getElementById("title").textContent = E && G ? "Power & Gas: Commitments of Traders" : (E ? "Electricity" : "Natural Gas") + ": Commitments of Traders";
 document.getElementById("sub").innerHTML =
   `Futures only · positions as of <b>${longDate(D.asOf)}</b>` +
   (D.changesFrom ? ` · changes vs ${longDate(D.changesFrom)}` : "") +
   (D.released ? ` · released ${longDate(D.released)}` : "") +
-  ` · ${C.length} contracts`;
+  ` · ${Object.entries(M).map(([m, p]) => `${p.contracts.length} ${MARKET_LABEL[m].toLowerCase()}`).join(", ")} contracts`;
 
 // Week picker (hosted site only; the emailed single file has no siblings to link to)
 if (D.archive && D.archive.length > 1) {
@@ -377,19 +461,26 @@ if (D.archive && D.archive.length > 1) {
 }
 
 // ---------- tabs ----------
-const TABS = [{ id: "overview", label: "Overview" }]
-  .concat(REGIONS.map(r => ({ id: r.toLowerCase().replace(/[^a-z]/g, ""), label: r, region: r, n: C.filter(c => c.region === r).length })))
-  .concat([{ id: "all", label: "All contracts", n: C.length }]);
+const REGIONS = E ? REGION_ORDER.filter(r => E.contracts.some(c => c.region === r)) : [];
+const TABS = [];
+if (E) {
+  TABS.push({ id: "overview", label: "Power overview" });
+  for (const r of REGIONS) TABS.push({ id: r.toLowerCase().replace(/[^a-z]/g, ""), label: r, region: r, n: E.contracts.filter(c => c.region === r).length });
+}
+if (G) TABS.push({ id: "natgas", label: "Natural gas", n: G.contracts.length, sep: !!E });
+TABS.push({ id: "all", label: "All contracts", n: ALL.length, sep: true });
 const nav = document.getElementById("tabs"), panels = document.getElementById("panels");
 for (const t of TABS) {
+  if (t.sep) nav.appendChild(el("span", { class: "sep", "aria-hidden": "true" }));
   const b = el("button", { role: "tab", "aria-selected": "false", "aria-controls": "p-" + t.id, id: "t-" + t.id, type: "button" }, esc(t.label) + (t.n ? `<span class="n">${t.n}</span>` : ""));
   b.onclick = () => select(t.id, true);
   nav.appendChild(b);
   t.panel = el("section", { class: "panel", id: "p-" + t.id, role: "tabpanel", "aria-labelledby": "t-" + t.id, hidden: "" });
   panels.appendChild(t.panel);
 }
+const tab = id => TABS.find(t => t.id === id);
 function select(id, push) {
-  if (!TABS.some(t => t.id === id)) id = "overview";
+  if (!tab(id)) id = TABS[0].id;
   for (const t of TABS) {
     const on = t.id === id;
     document.getElementById("t-" + t.id).setAttribute("aria-selected", on);
@@ -401,154 +492,142 @@ function select(id, push) {
   renderVisible(false);
 }
 
-// ---------- Overview ----------
-TABS[0].build = p => {
-  const totOI = sum(C, c => c.oi);
-  const prevTot = hasPrev ? sum(C, c => c.oiChg == null ? null : c.oi - c.oiChg) : null;
-  const withPrev = C.filter(c => c.oiChg != null);
-  const oiDelta = hasPrev ? sum(withPrev, c => c.oiChg) : null;
-  const mmNet = sum(C, c => net(c, "mm")), mmChg = sum(C, c => netChg(c, "mm"));
-  const top = [...C].sort((a, b) => b.oi - a.oi)[0];
+// ---------- Power overview ----------
+if (E) tab("overview").build = p => {
+  const C = E.contracts, hasPrev = !!E.prevDate;
+  const oiDelta = hasPrev ? sum(C, c => c.oiChg) : null;
+  const top = [...C].sort(byOI)[0];
   const nICE = C.filter(c => exShort(c.exchange) === "ICE").length, nNodal = C.filter(c => exShort(c.exchange) === "Nodal").length;
-
-  const tiles = el("div", { class: "tiles" });
-  tiles.innerHTML = [
-    `<div class="card tile"><div class="lab">Total open interest</div><div class="val">${compact(totOI)}</div><div class="d">${hasPrev ? `<span class="${dcls(oiDelta)}">${sgn(oiDelta)}</span> vs ${shortDate(D.prevDate)}` : "contracts, all markets"}</div></div>`,
-    `<div class="card tile"><div class="lab">Contracts reported</div><div class="val">${C.length}</div><div class="d">ICE ${nICE} · Nodal ${nNodal}</div></div>`,
-    `<div class="card tile"><div class="lab">Managed money net</div><div class="val">${sgn(mmNet)}</div><div class="d"><span class="${dcls(mmChg)}">${sgn(mmChg)}</span> on the week</div></div>`,
-    `<div class="card tile"><div class="lab">Largest market</div><div class="val sm">${esc(top.name)}</div><div class="d">${fmt(top.oi)} contracts · ${esc(top.region)}</div></div>`
-  ].join("");
-  p.appendChild(tiles);
-
+  p.appendChild(el("div", { class: "tiles" }, [
+    tile("Total open interest", compact(sum(C, c => c.oi)), hasPrev ? delta(oiDelta, "vs " + shortDate(E.prevDate)) : "contracts, all markets"),
+    tile("Contracts reported", C.length, `ICE ${nICE} · Nodal ${nNodal}`),
+    tile("Managed money net", sgn(sum(C, c => net(c, "mm"))), delta(sum(C, c => netChg(c, "mm")), "on the week")),
+    tile("Largest market", esc(top.name), `${fmt(top.oi)} contracts · ${esc(top.region)}`, true)
+  ].join("")));
   const stack = el("div", { class: "stack", style: "margin-top:16px" });
   p.appendChild(stack);
 
-  // Region composition
-  const regCard = el("div", { class: "card" }, `<h2>Open interest by region</h2><p class="hint">Long side of open interest, split by who holds it. Hover a bar for the breakdown.</p>${legendHTML(CATS)}`);
-  const regChart = el("div"); regCard.appendChild(regChart); stack.appendChild(regCard);
   const regRows = REGIONS.map(r => {
     const cs = C.filter(c => c.region === r), oi = sum(cs, c => c.oi);
-    const segs = CATS.map(k => ({ k: k.k, v: sum(cs, c => v0(c.pos[k.k].l) + v0(c.pos[k.k].sp)) }));
+    const segs = CATS.map(k => ({ k: k.k, v: sum(cs, c => longSide(c, k.k)) }));
     let t = `<div class="t">${esc(r)} · ${cs.length} contracts</div>` + row("Open interest", fmt(oi));
-    if (hasPrev) { const d = sum(cs, c => c.oiChg); t += row("Change vs " + shortDate(D.prevDate), `<span class="${dcls(d)}">${sgn(d)}</span>`); }
+    if (hasPrev) { const d = sum(cs, c => c.oiChg); t += row("Change vs " + shortDate(E.prevDate), `<span class="${dcls(d)}">${sgn(d)}</span>`); }
     t += "<hr>" + segs.map(g => row(CATS.find(k => k.k === g.k).label, `${fmt(g.v)} · ${pct(g.v / oi * 100)}`, g.k)).join("");
     return { label: r, segs, total: oi, tip: t };
   }).sort((a, b) => b.total - a.total);
-  mount(regChart, w => stackedBars(w, regRows, { labelW: 120 }));
+  stack.appendChild(chartCard("Open interest by region", "Long side of open interest, split by who holds it. Hover a bar for the breakdown.", w => stackedBars(w, regRows, { labelW: 120 })));
+  const topRows = oiRows(C);
+  stack.appendChild(chartCard("Largest 15 contracts by open interest", "Same split as above. Contract sizes differ by market, so compare within a market type.", w => stackedBars(w, topRows)));
+  stack.appendChild(positioningCard(() => C, "Pick a trader category. Left: net position as a share of each market's open interest. Right: the biggest net changes this week."));
 
-  // Top 15 contracts
-  const topCard = el("div", { class: "card" }, `<h2>Largest 15 contracts by open interest</h2><p class="hint">Same split as above. Contract sizes differ by market, so compare within a market type.</p>${legendHTML(CATS)}`);
-  const topChart = el("div"); topCard.appendChild(topChart); stack.appendChild(topCard);
-  const topRows = [...C].sort((a, b) => b.oi - a.oi).slice(0, 15).map(c => ({
-    label: c.name, total: c.oi, tip: contractTip(c),
-    segs: CATS.map(k => ({ k: k.k, v: v0(c.pos[k.k].l) + v0(c.pos[k.k].sp) }))
-  }));
-  mount(topChart, w => stackedBars(w, topRows));
-
-  // Positioning by category
-  let cat = "mm";
-  const posCard = el("div", { class: "card" });
-  posCard.innerHTML = `<h2>Who is long, who is short</h2><p class="hint">Pick a trader category. Left: net position as a share of each market's open interest (the 20 largest markets). Right: the biggest net changes this week.</p>`;
-  const ctr = el("div", { class: "controls" }, `<label>Trader category</label>`);
-  const seg = el("div", { class: "seg", role: "group", "aria-label": "Trader category" });
-  for (const k of TRADERS) {
-    const b = el("button", { type: "button", "aria-pressed": k.k === cat }, swatch(k.k) + k.label);
-    b.onclick = () => { cat = k.k; seg.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); renderVisible(true); };
-    seg.appendChild(b);
-  }
-  ctr.appendChild(seg); posCard.appendChild(ctr);
-  const g2 = el("div", { class: "grid2" });
-  const left = el("div"), right = el("div");
-  g2.append(el("div", {}, `<div class="hint" style="margin-bottom:6px">Net % of open interest</div>`), el("div", {}, `<div class="hint" style="margin-bottom:6px">Net change, contracts</div>`));
-  g2.children[0].appendChild(left); g2.children[1].appendChild(right);
-  posCard.appendChild(g2); stack.appendChild(posCard);
-  const lab = () => TRADERS.find(k => k.k === cat).label;
-  mount(left, w => divergingBars(w, [...C].sort((a, b) => b.oi - a.oi).slice(0, 20).map(c => ({
-    label: c.name, v: netPct(c, cat),
-    tip: `<div class="t">${esc(c.name)}</div>` + row(lab() + " net", `<b>${sgn(net(c, cat))}</b>`, cat) + row("Share of open interest", sgnPct(netPct(c, cat))) + row("Open interest", fmt(c.oi))
-  })), { k: cat, tick: t => t + "%", val: v => sgnPct(v) }));
-  mount(right, w => divergingBars(w, C.filter(c => netChg(c, cat)).sort((a, b) => Math.abs(netChg(b, cat)) - Math.abs(netChg(a, cat))).slice(0, 15).map(c => ({
-    label: c.name, v: netChg(c, cat),
-    tip: `<div class="t">${esc(c.name)}</div>` + row(lab() + " net, now", `<b>${sgn(net(c, cat))}</b>`, cat) + row("Change on the week", `<span class="${dcls(netChg(c, cat))}">${sgn(netChg(c, cat))}</span>`) + row("Long change", sgn(c.chg[cat].l)) + row("Short change", sgn(c.chg[cat].s))
-  })), { k: cat, tick: compact, val: sgn }));
-
-  // Trend
-  const H = D.history || [];
-  const trend = el("div", { class: "card" }, `<h2>Total open interest by report week</h2>`);
+  const H = E.history || [];
   if (H.length >= 2) {
-    trend.innerHTML += `<p class="hint">All electricity contracts, ${H.length} weeks. Hover for regional detail.</p>`;
     const pts = H.map(h => ({ x: shortDate(h.date), v: Object.values(h.oi).reduce((a, b) => a + b, 0) }));
-    const box = el("div"); trend.appendChild(box);
-    mount(box, w => lineChart(w, pts, {
+    stack.appendChild(chartCard("Total open interest by report week", `All electricity contracts, ${H.length} weeks. Hover for regional detail.`, w => lineChart(w, pts, {
       k: "pm", tip: i => {
         const h = H[i], byR = {};
         for (const [code, oi] of Object.entries(h.oi)) { const r = h.region[code]; byR[r] = (byR[r] || 0) + oi; }
         return `<div class="t">${longDate(h.date)}</div>` + row("Total open interest", `<b>${fmt(pts[i].v)}</b>`) + "<hr>" + REGION_ORDER.filter(r => byR[r]).map(r => row(r, fmt(byR[r]))).join("");
       }
-    }));
+    }), false));
   } else {
-    trend.innerHTML += `<p class="hint" style="margin:0">Only one week of data so far. Run the builder with <code>--backfill 12</code>, or keep running it weekly, and this chart fills in.</p>`;
+    stack.appendChild(el("div", { class: "card" }, `<h2>Total open interest by report week</h2><p class="hint" style="margin:0">Only one week of data so far. Run the builder with <code>--backfill 12</code>, or keep running it weekly, and this chart fills in.</p>`));
   }
-  stack.appendChild(trend);
 };
 
 // ---------- Region tabs ----------
-function contractCard(c) {
-  const card = el("article", { class: "card ct", id: "c-" + c.code });
-  const oiD = c.oiChg != null ? ` <span class="${dcls(c.oiChg)}">${sgn(c.oiChg)}</span>` : "";
-  card.innerHTML = `<h3>${esc(c.name)}</h3>
-    <div class="tags"><span class="tag">${esc(exShort(c.exchange))}</span><span class="tag">${c.period}</span><span class="tag">${c.tenor}</span>${c.unit ? `<span class="tag">${esc(c.unit)}</span>` : ""}</div>
-    <div class="meta"><span>Open interest <b>${fmt(c.oi)}</b>${oiD}</span><span>Traders <b>${c.traders ?? "—"}</b></span><span>Code ${esc(c.code)}</span></div>`;
-  const chart = el("div"); card.appendChild(chart);
-  mount(chart, w => butterfly(w, c));
-  return card;
-}
 for (const t of TABS.filter(t => t.region)) {
   t.build = p => {
-    const cs = C.filter(c => c.region === t.region);
-    const oi = sum(cs, c => c.oi), mm = sum(cs, c => net(c, "mm")), pm = sum(cs, c => net(c, "pm"));
-    const tiles = el("div", { class: "tiles" });
-    tiles.innerHTML = [
-      `<div class="card tile"><div class="lab">Open interest</div><div class="val">${compact(oi)}</div><div class="d">${hasPrev ? `<span class="${dcls(sum(cs, c => c.oiChg))}">${sgn(sum(cs, c => c.oiChg))}</span> vs ${shortDate(D.prevDate)}` : `${cs.length} contracts`}</div></div>`,
-      `<div class="card tile"><div class="lab">Producer/Merchant net</div><div class="val">${sgn(pm)}</div><div class="d"><span class="${dcls(sum(cs, c => netChg(c, "pm")))}">${sgn(sum(cs, c => netChg(c, "pm")))}</span> on the week</div></div>`,
-      `<div class="card tile"><div class="lab">Managed money net</div><div class="val">${sgn(mm)}</div><div class="d"><span class="${dcls(sum(cs, c => netChg(c, "mm")))}">${sgn(sum(cs, c => netChg(c, "mm")))}</span> on the week</div></div>`
-    ].join("");
-    p.appendChild(tiles);
-    const ctr = el("div", { class: "controls", style: "margin-top:16px" });
-    ctr.innerHTML = `<label for="s-${t.id}">Sort</label><select id="s-${t.id}"><option value="oi">Open interest</option><option value="name">Name</option><option value="mm">Managed money net % OI</option><option value="chg">Biggest weekly move</option></select>
-      <label for="f-${t.id}">Show</label><select id="f-${t.id}"><option value="">All</option><option value="Peak">Peak</option><option value="Off-peak">Off-peak</option></select>`;
-    p.appendChild(ctr);
-    p.appendChild(el("div", {}, legendHTML(CATS) + `<p class="hint" style="margin:-2px 0 12px">Bars: outright short (left) and long (right) positions. Hover a row for spreading, % of OI and trader counts.</p>`));
-    const grid = el("div", { class: "cards" }); p.appendChild(grid);
-    const cards = new Map(cs.map(c => [c.code, contractCard(c)]));
-    const move = c => Math.max(...TRADERS.map(k => Math.abs(netChg(c, k.k) || 0)));
-    const draw = () => {
-      const by = ctr.querySelector("select").value, f = ctr.querySelectorAll("select")[1].value;
-      const sorted = cs.filter(c => !f || c.period === f).sort(
-        by === "name" ? (a, b) => a.name.localeCompare(b.name) :
-        by === "mm" ? (a, b) => netPct(b, "mm") - netPct(a, "mm") :
-        by === "chg" ? (a, b) => move(b) - move(a) : (a, b) => b.oi - a.oi);
-      grid.replaceChildren(...sorted.map(c => cards.get(c.code)));
-      renderVisible(false);
-    };
-    ctr.querySelectorAll("select").forEach(s => s.onchange = draw);
-    draw();
+    const cs = E.contracts.filter(c => c.region === t.region), hasPrev = !!E.prevDate;
+    p.appendChild(el("div", { class: "tiles" }, [
+      tile("Open interest", compact(sum(cs, c => c.oi)), hasPrev ? delta(sum(cs, c => c.oiChg), "vs " + shortDate(E.prevDate)) : `${cs.length} contracts`),
+      tile("Producer/Merchant net", sgn(sum(cs, c => net(c, "pm"))), delta(sum(cs, c => netChg(c, "pm")), "on the week")),
+      tile("Managed money net", sgn(sum(cs, c => net(c, "mm"))), delta(sum(cs, c => netChg(c, "mm")), "on the week"))
+    ].join("")));
+    const sec = cardsSection(() => cs, { periodFilter: true });
+    sec.el.style.marginTop = "16px";
+    p.appendChild(sec.el);
+    t.cards = sec;
+    sec.draw();
   };
 }
 
+// ---------- Natural gas ----------
+if (G) tab("natgas").build = p => {
+  const C = G.contracts, hasPrev = !!G.prevDate;
+  const groups = GAS_ORDER.filter(g => C.some(c => c.region === g));
+  // The benchmark: NYMEX Henry Hub natural gas (CFTC code 023651), else the largest Henry Hub contract.
+  const hh = byCode["023651"] || [...C].filter(c => c.region === "Henry Hub").sort(byOI)[0] || [...C].sort(byOI)[0];
+  const nNGL = C.filter(c => c.region === "NGLs").length;
+  p.appendChild(el("p", { class: "hint", style: "margin:0 0 8px" }, `Headline: <b style="color:var(--ink)">${esc(hh.name)}</b> (${esc(exShort(hh.exchange))}${hh.unit ? ", " + esc(hh.unit) : ""}), the benchmark gas futures contract.`));
+  p.appendChild(el("div", { class: "tiles" }, [
+    tile("Henry Hub open interest", compact(hh.oi), hh.oiChg != null ? delta(hh.oiChg, "vs " + shortDate(G.prevDate)) : `${fmt(hh.oi)} contracts`),
+    tile("Managed money net", sgn(net(hh, "mm")), delta(netChg(hh, "mm"), "on the week") + ` · ${sgnPct(netPct(hh, "mm"))} of OI`),
+    tile("Producer/Merchant net", sgn(net(hh, "pm")), delta(netChg(hh, "pm"), "on the week")),
+    tile("Swap dealers net", sgn(net(hh, "swap")), delta(netChg(hh, "swap"), "on the week")),
+    tile("Contracts reported", C.length, `${C.length - nNGL} gas · ${nNGL} NGLs`)
+  ].join("")));
+  const stack = el("div", { class: "stack", style: "margin-top:16px" });
+  p.appendChild(stack);
+
+  const H = (G.history || []).filter(h => h.mm[hh.code] != null);
+  if (H.length >= 2) {
+    const g2 = el("div", { class: "grid2" });
+    const mmPts = H.map(h => ({ x: shortDate(h.date), v: h.mm[hh.code] }));
+    const pmPts = H.map(h => ({ x: shortDate(h.date), v: h.pm[hh.code] }));
+    const trendTip = i => { const h = H[i]; return `<div class="t">${longDate(h.date)}</div>` + row("Managed money net", `<b>${sgn(h.mm[hh.code])}</b>`, "mm") + row("Producer/Merchant net", sgn(h.pm[hh.code]), "pm") + row("Open interest", fmt(h.oi[hh.code])); };
+    g2.append(
+      chartCard("Managed money net, Henry Hub", `${esc(hh.name)}, ${H.length} weeks. Funds' net long (+) or short (−) in contracts.`, w => lineChart(w, mmPts, { k: "mm", tip: trendTip }), false),
+      chartCard("Producer/Merchant net, Henry Hub", `Same contract. Producers and merchants hedging physical gas.`, w => lineChart(w, pmPts, { k: "pm", tip: trendTip }), false));
+    stack.appendChild(g2);
+  }
+
+  // Group switch drives everything below it.
+  let group = groups.includes("Henry Hub") ? "Henry Hub" : groups[0];
+  const list = () => C.filter(c => c.region === group);
+  const ctr = el("div", { class: "controls", style: "margin:4px 0 0" }, `<label>Contract group</label>`);
+  const seg = el("div", { class: "seg", role: "group", "aria-label": "Contract group" });
+  const below = el("div", { class: "stack" });
+  const notes = { "Henry Hub": "Henry Hub benchmark contracts. NYMEX is 10,000 MMBtu per contract, ICE mostly 2,500.", "Basis": "Regional hub price minus Henry Hub. Net long = betting the hub strengthens vs Henry Hub.", "Index": "Regional hub index (fixed-price) contracts.", "Other": "Other regional gas contracts.", "NGLs": "Natural gas liquids (propane, butane, ethane, natural gasoline). Units are gallons or metric tonnes, not MMBtu." };
+  const groupNote = el("p", { class: "hint", style: "margin:-4px 0 0" });
+  for (const g of groups) {
+    const b = el("button", { type: "button", "aria-pressed": g === group, "data-g": g }, `${esc(g)} <span class="n">${C.filter(c => c.region === g).length}</span>`);
+    b.onclick = () => setGroup(g);
+    seg.appendChild(b);
+  }
+  ctr.appendChild(seg);
+  stack.append(ctr, groupNote, below);
+  below.appendChild(chartCard("Largest contracts by open interest", "Long side of open interest, split by who holds it. Hover a bar for the breakdown.", w => stackedBars(w, oiRows(list()))));
+  below.appendChild(positioningCard(list, "Pick a trader category. Left: net position as a share of each market's open interest. Right: the biggest net changes this week."));
+  const sec = cardsSection(list);
+  below.appendChild(sec.el);
+  function setGroup(g) {
+    group = g;
+    seg.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.g === g));
+    groupNote.textContent = notes[g] || "";
+    sec.draw();
+    renderVisible(true);
+  }
+  tab("natgas").setGroup = setGroup;
+  setGroup(group);
+};
+
 // ---------- All contracts ----------
-TABS[TABS.length - 1].build = p => {
+tab("all").build = p => {
+  const groups = [...new Set(ALL.map(c => c.region))];
   const ctr = el("div", { class: "controls" });
-  ctr.innerHTML = `<input type="search" placeholder="Search contracts" aria-label="Search contracts">
-    <label for="ar">Region</label><select id="ar"><option value="">All</option>${REGIONS.map(r => `<option>${r}</option>`).join("")}</select>
-    <label for="ae">Exchange</label><select id="ae"><option value="">All</option><option>ICE</option><option>Nodal</option></select>`;
+  ctr.innerHTML = `<input type="search" placeholder="Search contracts" aria-label="Search contracts">` +
+    (E && G ? `<label for="am">Market</label><select id="am"><option value="">All</option><option value="electricity">Electricity</option><option value="natgas">Natural gas</option></select>` : "") +
+    `<label for="ar">Group</label><select id="ar"><option value="">All</option>${groups.map(r => `<option>${esc(r)}</option>`).join("")}</select>`;
   p.appendChild(ctr);
+  const anyPrev = Object.values(M).some(m => m.prevDate);
   const cols = [
     { h: "Contract", f: c => c.name, l: 1 },
-    { h: "Region", f: c => c.region, l: 1 },
+    ...(E && G ? [{ h: "Market", f: c => MARKET_LABEL[c.market], l: 1 }] : []),
+    { h: "Group", f: c => c.region, l: 1 },
     { h: "Exch.", f: c => exShort(c.exchange), l: 1 },
     { h: "Open interest", f: c => c.oi, n: fmt },
-    ...(hasPrev ? [{ h: "OI Δ", f: c => c.oiChg, n: sgn, d: 1 }] : []),
+    ...(anyPrev ? [{ h: "OI Δ", f: c => c.oiChg, n: sgn, d: 1 }] : []),
     { h: "Prod/Merch net", f: c => net(c, "pm"), n: sgn },
     { h: "Swap net", f: c => net(c, "swap"), n: sgn },
     { h: "Mgd money net", f: c => net(c, "mm"), n: sgn },
@@ -557,14 +636,14 @@ TABS[TABS.length - 1].build = p => {
     { h: "MM % OI", f: c => netPct(c, "mm"), n: sgnPct },
     { h: "Traders", f: c => c.traders, n: fmt }
   ];
-  let sortI = 3, dir = -1;
+  let sortI = cols.findIndex(c => c.h === "Open interest"), dir = -1;
   const wrap = el("div", { class: "tblwrap" }), tbl = el("table");
   wrap.appendChild(tbl); p.appendChild(wrap);
-  const note = el("p", { class: "hint", style: "margin-top:8px" }, "Click a column to sort; click a row to open that contract's chart.");
-  p.appendChild(note);
+  p.appendChild(el("p", { class: "hint", style: "margin-top:8px" }, "Click a column to sort; click a row to open that contract's chart. Open interest is in each contract's own size."));
+  const val = id => { const s = ctr.querySelector(id); return s ? s.value : ""; };
   const draw = () => {
-    const q = ctr.querySelector("input").value.trim().toLowerCase(), r = ctr.querySelector("#ar").value, x = ctr.querySelector("#ae").value;
-    const rows = C.filter(c => (!q || c.name.toLowerCase().includes(q) || c.code.includes(q)) && (!r || c.region === r) && (!x || exShort(c.exchange) === x))
+    const q = ctr.querySelector("input").value.trim().toLowerCase(), m = val("#am"), r = val("#ar");
+    const rows = ALL.filter(c => (!q || c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q)) && (!m || c.market === m) && (!r || c.region === r))
       .sort((a, b) => { const A = cols[sortI].f(a), B = cols[sortI].f(b); return (typeof A === "string" ? A.localeCompare(B) : (A ?? -Infinity) - (B ?? -Infinity)) * dir; });
     tbl.innerHTML = `<thead><tr>${cols.map((c, i) => `<th class="${c.l ? "l" : ""}" data-i="${i}" ${i === sortI ? `aria-sort="${dir > 0 ? "ascending" : "descending"}"` : ""}>${c.h}</th>`).join("")}</tr></thead>
       <tbody>${rows.map(c => `<tr data-code="${esc(c.code)}">${cols.map(k => { const v = k.f(c); return `<td class="${k.l ? "l" : ""} ${k.d ? dcls(v) : ""}">${k.n ? k.n(v) : esc(v)}</td>`; }).join("")}</tr>`).join("")}</tbody>`;
@@ -580,9 +659,15 @@ TABS[TABS.length - 1].build = p => {
   draw();
 };
 function openContract(code) {
-  const c = byCode[code], t = TABS.find(t => t.region === c.region);
-  select(t.id, true);
-  const sel = t.panel.querySelectorAll("select")[1]; if (sel && sel.value) { sel.value = ""; sel.onchange(); }
+  const c = byCode[code];
+  if (c.market === "natgas") {
+    select("natgas", true);
+    tab("natgas").setGroup(c.region);
+  } else {
+    const t = TABS.find(t => t.region === c.region);
+    select(t.id, true);
+    t.cards.clearFilter();
+  }
   const card = document.getElementById("c-" + code);
   card.scrollIntoView({ behavior: "smooth", block: "center" });
   card.classList.add("flash"); setTimeout(() => card.classList.remove("flash"), 1800);
@@ -591,14 +676,14 @@ function openContract(code) {
 // ---------- footer ----------
 document.getElementById("foot").innerHTML = `
   <dl>
-    <dt>Producer/Merchant</dt><dd>Producers, merchants, processors and users of physical power hedging with futures.</dd>
+    <dt>Producer/Merchant</dt><dd>Producers, merchants, processors and users of the physical commodity hedging with futures.</dd>
     <dt>Swap dealers</dt><dd>Firms dealing mainly in swaps, using futures to offset that risk.</dd>
     <dt>Managed money</dt><dd>CTAs, CPOs and funds trading on behalf of clients.</dd>
     <dt>Other reportables</dt><dd>All other traders large enough to report.</dd>
     <dt>Non-reportable</dt><dd>Positions below the reporting level, worked out here as open interest minus reportable positions.</dd>
   </dl>
   <p>Net = long − short (outright only; spreading positions are equal long and short). "—" means CFTC withheld or didn't report the figure. Open interest is in contracts, and contract size varies by market (see each card's tags), so cross-market totals are a guide, not a like-for-like sum.</p>
-  <p>Source: <a href="${esc(D.source)}">${esc(D.source)}</a> · CFTC Disaggregated Commitments of Traders, electricity, futures only · built ${esc(D.generated)}</p>`;
+  <p>Sources: ${Object.entries(M).map(([m, p]) => `${MARKET_LABEL[m]} <a href="${esc(p.source)}">${esc(p.source)}</a>`).join(" · ")}<br>CFTC Disaggregated Commitments of Traders, futures only · built ${esc(D.generated)}</p>`;
 
 // ---------- theme toggle (works in an emailed file; no storage needed) ----------
 document.getElementById("themeBtn").onclick = () => {
@@ -606,7 +691,7 @@ document.getElementById("themeBtn").onclick = () => {
   r.dataset.theme = dark ? "light" : "dark";
 };
 
-select((location.hash || "#overview").slice(1), false);
+select((location.hash || "#" + TABS[0].id).slice(1), false);
 </script>
 </body>
 </html>
