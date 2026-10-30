@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Electricity COT Report</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --wash: rgba(11,11,11,0.04);
+  --up: #006300; --down: #b42a2a; --accent: #2a78d6;
+  --c-pm: #2a78d6; --c-swap: #eb6834; --c-mm: #1baf7a; --c-other: #eda100; --c-nr: #e87ba4;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --wash: rgba(255,255,255,0.05);
+    --up: #0ca30c; --down: #e66767; --accent: #3987e5;
+    --c-pm: #3987e5; --c-swap: #d95926; --c-mm: #199e70; --c-other: #c98500; --c-nr: #d55181;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --wash: rgba(255,255,255,0.05);
+  --up: #0ca30c; --down: #e66767; --accent: #3987e5;
+  --c-pm: #3987e5; --c-swap: #d95926; --c-mm: #199e70; --c-other: #c98500; --c-nr: #d55181;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--page); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 24px 16px 48px; }
+header h1 { font-size: 22px; font-weight: 650; margin: 0 0 4px; letter-spacing: -0.01em; }
+header .sub { color: var(--ink-2); }
+header .sub b { color: var(--ink); font-weight: 600; }
+.theme-btn { float: right; background: none; border: 1px solid var(--border); color: var(--ink-2); border-radius: 8px; padding: 4px 10px; cursor: pointer; font: inherit; font-size: 12px; }
+nav.tabs { display: flex; gap: 4px; margin: 20px 0 16px; overflow-x: auto; border-bottom: 1px solid var(--grid); scrollbar-width: thin; }
+nav.tabs button { flex: none; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--ink-2); font: inherit; font-weight: 550; padding: 8px 12px 10px; cursor: pointer; white-space: nowrap; }
+nav.tabs button:hover { color: var(--ink); }
+nav.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+nav.tabs .n { color: var(--muted); font-weight: 400; margin-left: 4px; font-size: 12px; }
+.panel[hidden] { display: none; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; min-width: 0; }
+.card h2 { font-size: 15px; font-weight: 620; margin: 0 0 2px; }
+.card .hint { color: var(--muted); font-size: 12px; margin: 0 0 12px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 16px; }
+.stack { display: grid; gap: 16px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 12px; }
+@media (max-width: 480px) { .tile .val { font-size: 22px; } .tile .val.sm { font-size: 15px; } .card { padding: 14px 12px; } }
+.tile .lab { color: var(--ink-2); font-size: 12px; }
+.tile .val { font-size: 26px; font-weight: 620; margin: 2px 0; overflow-wrap: anywhere; }
+.tile .val.sm { font-size: 17px; line-height: 1.3; }
+.tile .d { font-size: 12px; color: var(--muted); }
+.up { color: var(--up); } .down { color: var(--down); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--ink-2); margin: 0 0 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex: none; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 0 0 12px; }
+.controls label { color: var(--ink-2); font-size: 12px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex-wrap: wrap; }
+.seg button { background: none; border: 0; color: var(--ink-2); font: inherit; font-size: 12px; padding: 5px 10px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-pressed="true"] { background: var(--wash); color: var(--ink); font-weight: 600; }
+select, input[type="search"] { font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; }
+input[type="search"] { width: min(100%, 280px); }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 12px; }
+.ct h3 { font-size: 13.5px; font-weight: 620; margin: 0; overflow-wrap: anywhere; }
+.ct .tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 8px; }
+.tag { font-size: 11px; color: var(--ink-2); border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px; }
+.ct .meta { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); margin-bottom: 6px; }
+.ct .meta b { color: var(--ink); font-weight: 600; font-size: 14px; }
+.ct.flash { outline: 2px solid var(--accent); outline-offset: 2px; }
+svg { display: block; overflow: visible; }
+svg text { fill: var(--ink-2); font: 11px system-ui, -apple-system, "Segoe UI", sans-serif; }
+svg text.ink { fill: var(--ink); }
+svg text.mut { fill: var(--muted); }
+svg .num { font-variant-numeric: tabular-nums; }
+.gl { stroke: var(--grid); stroke-width: 1; }
+.ax { stroke: var(--axis); stroke-width: 1; }
+.f-pm { fill: var(--c-pm); } .f-swap { fill: var(--c-swap); } .f-mm { fill: var(--c-mm); } .f-other { fill: var(--c-other); } .f-nr { fill: var(--c-nr); }
+.s-pm { stroke: var(--c-pm); } .s-mm { stroke: var(--c-mm); }
+.hit { fill: transparent; cursor: default; }
+.hit:hover { fill: var(--wash); }
+.tblwrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th, td { padding: 7px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--grid); }
+th:first-child, td:first-child, th.l, td.l { text-align: left; }
+td:first-child { white-space: normal; min-width: 220px; }
+th { position: sticky; top: 0; background: var(--surface); color: var(--ink-2); font-weight: 600; cursor: pointer; user-select: none; }
+th[aria-sort="ascending"]::after { content: " \25B2"; font-size: 9px; }
+th[aria-sort="descending"]::after { content: " \25BC"; font-size: 9px; }
+td { font-variant-numeric: tabular-nums; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--wash); }
+.empty { color: var(--muted); font-size: 13px; padding: 24px 0; text-align: center; }
+#tip { position: fixed; z-index: 10; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; font-size: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.14); max-width: 320px; opacity: 0; transition: opacity .08s; }
+#tip.on { opacity: 1; }
+#tip .t { font-weight: 620; margin-bottom: 4px; }
+#tip .r { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+#tip .r > span:first-child { display: inline-flex; gap: 6px; align-items: center; color: var(--ink-2); }
+#tip .r > span:last-child { font-variant-numeric: tabular-nums; }
+#tip hr { border: 0; border-top: 1px solid var(--grid); margin: 5px 0; }
+footer { margin-top: 28px; color: var(--ink-2); font-size: 12px; }
+footer dl { display: grid; grid-template-columns: minmax(120px, auto) 1fr; gap: 4px 12px; margin: 8px 0 12px; }
+footer dt { color: var(--ink); font-weight: 600; }
+footer dd { margin: 0; }
+footer a { color: var(--accent); }
+@media print { nav.tabs, .theme-btn, .controls { display: none; } .panel[hidden] { display: block; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <button class="theme-btn" id="themeBtn" type="button">Theme</button>
+    <h1>Electricity: Commitments of Traders</h1>
+    <div class="sub" id="sub"></div>
+    <div class="controls" id="weeks" style="margin:10px 0 0" hidden></div>
+  </header>
+  <nav class="tabs" id="tabs" role="tablist"></nav>
+  <main id="panels"></main>
+  <footer id="foot"></footer>
+</div>
+<div id="tip" role="tooltip"></div>
+<script>
+const D = /*__DATA__*/null;
+
+const CATS = [
+  { k: "pm", label: "Producer/Merchant", short: "Prod/Merch" },
+  { k: "swap", label: "Swap dealers", short: "Swap" },
+  { k: "mm", label: "Managed money", short: "Mgd money" },
+  { k: "other", label: "Other reportables", short: "Other rept" },
+  { k: "nr", label: "Non-reportable", short: "Non-rept" }
+];
+const TRADERS = CATS.slice(0, 4);
+const REGION_ORDER = ["PJM", "ERCOT", "West", "MISO", "NYISO", "ISO-NE", "Other"];
+const C = D.contracts;
+const byCode = Object.fromEntries(C.map(c => [c.code, c]));
+const REGIONS = REGION_ORDER.filter(r => C.some(c => c.region === r));
+const hasPrev = !!D.prevDate;
+
+// ---------- formatting ----------
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+const fmt = n => n == null ? "—" : Math.round(n).toLocaleString("en-US");
+const sgn = n => n == null ? "—" : (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(Math.round(n)).toLocaleString("en-US");
+const pct = n => n == null ? "—" : (Math.round(n * 10) / 10).toFixed(1) + "%";
+const sgnPct = n => n == null ? "—" : (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n).toFixed(1) + "%";
+function compact(n) {
+  if (n == null) return "—";
+  const a = Math.abs(n), s = n < 0 ? "−" : "";
+  if (a >= 1e6) return s + (a / 1e6).toFixed(a >= 1e7 ? 0 : 1).replace(/\.0$/, "") + "M";
+  if (a >= 1e3) return s + (a / 1e3).toFixed(a >= 1e4 ? 0 : 1).replace(/\.0$/, "") + "K";
+  return s + Math.round(a);
+}
+const dcls = n => n > 0 ? "up" : n < 0 ? "down" : "";
+const longDate = iso => iso ? new Date(iso + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "—";
+const shortDate = iso => new Date(iso + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+const exShort = e => /NODAL/i.test(e) ? "Nodal" : /ICE/i.test(e) ? "ICE" : e;
+
+// ---------- derived values ----------
+const v0 = x => x == null ? 0 : x;
+const net = (c, k) => v0(c.pos[k].l) - v0(c.pos[k].s);
+const netPct = (c, k) => c.oi ? net(c, k) / c.oi * 100 : 0;
+const netChg = (c, k) => c.chg && c.chg[k] ? v0(c.chg[k].l) - v0(c.chg[k].s) : null;
+const sum = (arr, f) => arr.reduce((a, x) => a + v0(f(x)), 0);
+
+// ---------- tooltip ----------
+let TIPS = [];
+const tip = html => TIPS.push(html) - 1;
+const tipEl = document.getElementById("tip");
+const swatch = k => `<span class="sw" style="background:var(--c-${k})"></span>`;
+const row = (l, r, k) => `<div class="r"><span>${k ? swatch(k) : ""}${l}</span><span>${r}</span></div>`;
+function showTip(html, x, y) {
+  tipEl.innerHTML = html; tipEl.classList.add("on");
+  const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+  let left = x + 14, top = y + 14;
+  if (left + w > innerWidth - 8) left = Math.max(8, x - w - 14);
+  if (top + h > innerHeight - 8) top = Math.max(8, y - h - 14);
+  tipEl.style.left = left + "px"; tipEl.style.top = top + "px";
+}
+const hideTip = () => tipEl.classList.remove("on");
+document.addEventListener("mousemove", e => {
+  const t = e.target.closest && e.target.closest("[data-tip]");
+  if (t) showTip(TIPS[+t.dataset.tip], e.clientX, e.clientY);
+  else if (!e.target.closest || !e.target.closest(".line-hit")) hideTip();
+});
+document.addEventListener("scroll", hideTip, true);
+
+function contractTip(c) {
+  let h = `<div class="t">${esc(c.name)}</div>` + row("Open interest", fmt(c.oi) + (c.oiChg != null ? ` <span class="${dcls(c.oiChg)}">(${sgn(c.oiChg)})</span>` : ""));
+  h += "<hr>" + row("<i>Long side</i>", "contracts · % OI");
+  for (const k of CATS) {
+    const l = v0(c.pos[k.k].l) + v0(c.pos[k.k].sp);
+    h += row(k.label, `${fmt(l)} · ${pct(l / c.oi * 100)}`, k.k);
+  }
+  return h;
+}
+
+// ---------- SVG helpers ----------
+function niceTicks(lo, hi, n = 4) {
+  if (hi === lo) hi = lo + 1;
+  const raw = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw);
+  const out = [];
+  for (let v = Math.floor(lo / step) * step; v <= hi + step * 1e-9; v += step) out.push(+v.toFixed(10));
+  if (out[out.length - 1] < hi) out.push(out[out.length - 1] + step);
+  return out;
+}
+// Horizontal bar from x0 (baseline, square) to x1 (data end, 4px rounded).
+function hbar(x0, x1, y, h, cls, r = 4) {
+  const w = Math.abs(x1 - x0);
+  if (w < 0.5) return "";
+  r = Math.min(r, w, h / 2);
+  const d = x1 >= x0
+    ? `M${x0},${y}H${x1 - r}Q${x1},${y} ${x1},${y + r}V${y + h - r}Q${x1},${y + h} ${x1 - r},${y + h}H${x0}Z`
+    : `M${x0},${y}H${x1 + r}Q${x1},${y} ${x1},${y + r}V${y + h - r}Q${x1},${y + h} ${x1 + r},${y + h}H${x0}Z`;
+  return `<path class="${cls}" d="${d}"/>`;
+}
+function fitText(s, px) { // trim a label to roughly fit px at 11px font
+  const max = Math.max(4, Math.floor(px / 6.1));
+  return s.length > max ? s.slice(0, max - 1) + "…" : s;
+}
+
+// Stacked horizontal bars: rows = [{label, segs:[{k,v}], total, tip}]
+function stackedBars(w, rows, opt = {}) {
+  const narrow = w < 560, bh = 16;
+  const labelW = narrow ? 0 : Math.min(opt.labelW || 250, w * 0.38);
+  const valW = 52, x0 = labelW, x1 = w - valW;
+  const rowH = narrow ? 42 : 28, top = 4;
+  const max = Math.max(...rows.map(r => r.total), 1);
+  const ticks = niceTicks(0, max, narrow ? 3 : 5);
+  const sx = v => x0 + v / ticks[ticks.length - 1] * (x1 - x0);
+  const h = top + rows.length * rowH + 22;
+  let s = "";
+  for (const t of ticks) s += `<line class="gl" x1="${sx(t)}" x2="${sx(t)}" y1="0" y2="${h - 20}"/><text class="mut num" x="${sx(t)}" y="${h - 6}" text-anchor="middle">${compact(t)}</text>`;
+  rows.forEach((r, i) => {
+    const y = top + i * rowH, by = narrow ? y + 18 : y + (rowH - bh) / 2;
+    s += `<rect class="hit" x="0" y="${y}" width="${w}" height="${rowH}" rx="6" data-tip="${tip(r.tip)}"/>`;
+    s += narrow
+      ? `<text class="ink" x="0" y="${y + 12}">${esc(fitText(r.label, w - 8))}</text>`
+      : `<text class="ink" x="${x0 - 10}" y="${by + bh / 2 + 4}" text-anchor="end">${esc(fitText(r.label, labelW - 14))}</text>`;
+    let acc = 0;
+    const segs = r.segs.filter(g => g.v > 0);
+    segs.forEach((g, j) => {
+      const a = sx(acc), b = sx(acc + g.v), last = j === segs.length - 1;
+      if (last) s += hbar(a, b, by, bh, "f-" + g.k);
+      else if (b - a > 2) s += `<rect class="f-${g.k}" x="${a}" y="${by}" width="${b - a - 2}" height="${bh}"/>`;
+      acc += g.v;
+    });
+    s += `<text class="ink num" x="${sx(acc) + 6}" y="${by + bh / 2 + 4}">${compact(r.total)}</text>`;
+  });
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img">${s}</svg>`;
+}
+
+// Diverging horizontal bars around zero: rows = [{label, v, tip}]
+function divergingBars(w, rows, opt) {
+  if (!rows.length) return `<div class="empty">No contracts with a position in this category.</div>`;
+  const narrow = w < 560, bh = 14;
+  const labelW = narrow ? 0 : Math.min(230, w * 0.36);
+  const pad = 46, x0 = labelW + pad, x1 = w - pad;
+  const rowH = narrow ? 38 : 24, top = 4;
+  const lo = Math.min(0, ...rows.map(r => r.v)), hi = Math.max(0, ...rows.map(r => r.v));
+  const ticks = niceTicks(lo, hi, narrow ? 3 : 4);
+  const t0 = ticks[0], t1 = ticks[ticks.length - 1];
+  const sx = v => x0 + (v - t0) / (t1 - t0 || 1) * (x1 - x0);
+  const h = top + rows.length * rowH + 22;
+  let s = "";
+  for (const t of ticks) s += `<line class="${t === 0 ? "ax" : "gl"}" x1="${sx(t)}" x2="${sx(t)}" y1="0" y2="${h - 20}"/><text class="mut num" x="${sx(t)}" y="${h - 6}" text-anchor="middle">${opt.tick(t)}</text>`;
+  rows.forEach((r, i) => {
+    const y = top + i * rowH, by = narrow ? y + 18 : y + (rowH - bh) / 2;
+    s += `<rect class="hit" x="0" y="${y}" width="${w}" height="${rowH}" rx="6" data-tip="${tip(r.tip)}"/>`;
+    s += narrow
+      ? `<text class="ink" x="0" y="${y + 12}">${esc(fitText(r.label, w - 8))}</text>`
+      : `<text class="ink" x="${labelW - 6}" y="${by + bh / 2 + 4}" text-anchor="end">${esc(fitText(r.label, labelW - 10))}</text>`;
+    s += hbar(sx(0), sx(r.v), by, bh, "f-" + opt.k);
+    const tx = r.v >= 0 ? sx(r.v) + 5 : sx(r.v) - 5;
+    s += `<text class="ink num" x="${tx}" y="${by + bh / 2 + 4}" text-anchor="${r.v >= 0 ? "start" : "end"}">${opt.val(r.v)}</text>`;
+  });
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img">${s}</svg>`;
+}
+
+// Long/short butterfly for one contract: short bars left of center, long bars right.
+function butterfly(w, c) {
+  const showD = w >= 300, labW = 66, netW = 58, dW = showD ? 56 : 0;
+  const bx0 = labW, bx1 = w - netW - dW, mid = (bx0 + bx1) / 2, half = (bx1 - bx0) / 2 - 2;
+  const rowH = 22, bh = 12, top = 18;
+  const max = Math.max(1, ...CATS.map(k => Math.max(v0(c.pos[k.k].l), v0(c.pos[k.k].s))));
+  const sc = v => v0(v) / max * half;
+  const h = top + CATS.length * rowH + 2;
+  let s = `<text class="mut" x="${mid - 6}" y="10" text-anchor="end">◂ short</text><text class="mut" x="${mid + 6}" y="10">long ▸</text>`;
+  s += `<text class="mut" x="${w - dW - 2}" y="10" text-anchor="end">Net</text>`;
+  if (showD) s += `<text class="mut" x="${w - 2}" y="10" text-anchor="end">Δ week</text>`;
+  CATS.forEach((k, i) => {
+    const y = top + i * rowH, by = y + (rowH - bh) / 2, p = c.pos[k.k], g = c.chg && c.chg[k.k], pc = c.pct && c.pct[k.k], tr = c.trd && c.trd[k.k];
+    const n = net(c, k.k), dn = netChg(c, k.k);
+    let t = `<div class="t">${esc(c.name)}</div><div class="r"><span>${swatch(k.k)}<b>${k.label}</b></span><span></span></div><hr>`;
+    t += row("Long", fmt(p.l) + (g ? ` <span class="${dcls(g.l)}">(${sgn(g.l)})</span>` : "") + (pc && pc.l != null ? ` · ${pct(pc.l)}` : ""));
+    t += row("Short", fmt(p.s) + (g ? ` <span class="${dcls(g.s)}">(${sgn(g.s)})</span>` : "") + (pc && pc.s != null ? ` · ${pct(pc.s)}` : ""));
+    if (k.k !== "pm" && k.k !== "nr") t += row("Spreading", fmt(p.sp) + (g && g.sp != null ? ` <span class="${dcls(g.sp)}">(${sgn(g.sp)})</span>` : ""));
+    t += row("Net", `<b>${sgn(n)}</b>`);
+    if (tr) t += `<hr>` + row("Traders long / short", `${tr.l ?? "—"} / ${tr.s ?? "—"}`) + (k.k !== "pm" ? row("Traders spreading", tr.sp ?? "—") : "");
+    if (k.k === "nr") t += `<hr><div style="color:var(--muted)">Open interest minus all reportable positions.</div>`;
+    s += `<rect class="hit" x="0" y="${y}" width="${w}" height="${rowH}" rx="5" data-tip="${tip(t)}"/>`;
+    s += `<text x="0" y="${by + bh / 2 + 4}">${k.short}</text>`;
+    s += hbar(mid - 1, mid - 1 - sc(p.s), by, bh, "f-" + k.k) + hbar(mid + 1, mid + 1 + sc(p.l), by, bh, "f-" + k.k);
+    s += `<text class="ink num" x="${w - dW - 2}" y="${by + bh / 2 + 4}" text-anchor="end">${sgn(n)}</text>`;
+    if (showD) s += `<text class="num ${dn == null ? "mut" : ""}" x="${w - 2}" y="${by + bh / 2 + 4}" text-anchor="end">${sgn(dn)}</text>`;
+  });
+  s += `<line class="ax" x1="${mid}" x2="${mid}" y1="${top - 2}" y2="${h}"/>`;
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Long and short positions by trader category">${s}</svg>`;
+}
+
+// Single-series line with crosshair: pts = [{x: label, v}]
+const LINES = [];
+function lineChart(w, pts, opt) {
+  const h = 220, l = 48, r = 16, t = 12, b = 26;
+  const vs = pts.map(p => p.v), lo0 = Math.min(...vs), hi0 = Math.max(...vs);
+  const ticks = niceTicks(lo0 - (hi0 - lo0) * 0.1, hi0 + (hi0 - lo0) * 0.05, 4);
+  const y0 = ticks[0], y1 = ticks[ticks.length - 1];
+  const sx = i => l + (pts.length === 1 ? 0.5 : i / (pts.length - 1)) * (w - l - r);
+  const sy = v => t + (1 - (v - y0) / (y1 - y0 || 1)) * (h - t - b);
+  let s = "";
+  for (const tk of ticks) s += `<line class="gl" x1="${l}" x2="${w - r}" y1="${sy(tk)}" y2="${sy(tk)}"/><text class="mut num" x="${l - 8}" y="${sy(tk) + 4}" text-anchor="end">${compact(tk)}</text>`;
+  const every = Math.ceil(pts.length / Math.max(2, Math.floor((w - l - r) / 64)));
+  pts.forEach((p, i) => { if (i % every === 0 || i === pts.length - 1) s += `<text class="mut" x="${sx(i)}" y="${h - 6}" text-anchor="middle">${esc(p.x)}</text>`; });
+  s += `<path d="${pts.map((p, i) => (i ? "L" : "M") + sx(i) + "," + sy(p.v)).join("")}" fill="none" class="s-${opt.k}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  const last = pts.length - 1;
+  s += `<circle cx="${sx(last)}" cy="${sy(pts[last].v)}" r="4.5" class="f-${opt.k}" stroke="var(--surface)" stroke-width="2"/>`;
+  const id = LINES.push({ pts, sx, sy, l, r, w, opt }) - 1;
+  s += `<g class="xh" style="display:none"><line class="ax" y1="${t}" y2="${h - b}"/><circle r="5" class="f-${opt.k}" stroke="var(--surface)" stroke-width="2"/></g>`;
+  s += `<rect class="line-hit" data-line="${id}" x="${l}" y="0" width="${w - l - r}" height="${h - b}" fill="transparent"/>`;
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img">${s}</svg>`;
+}
+document.addEventListener("mousemove", e => {
+  const hit = e.target.closest && e.target.closest(".line-hit");
+  document.querySelectorAll(".xh").forEach(g => { if (!hit || !g.parentNode.contains(hit)) g.style.display = "none"; });
+  if (!hit) return;
+  const L = LINES[+hit.dataset.line], box = hit.ownerSVGElement.getBoundingClientRect();
+  const x = e.clientX - box.left, n = L.pts.length;
+  const i = Math.max(0, Math.min(n - 1, Math.round(n === 1 ? 0 : (x - L.l) / (L.w - L.l - L.r) * (n - 1))));
+  const g = hit.ownerSVGElement.querySelector(".xh"), p = L.pts[i];
+  g.style.display = "";
+  g.querySelector("line").setAttribute("x1", L.sx(i)); g.querySelector("line").setAttribute("x2", L.sx(i));
+  g.querySelector("circle").setAttribute("cx", L.sx(i)); g.querySelector("circle").setAttribute("cy", L.sy(p.v));
+  showTip(L.opt.tip(i), e.clientX, e.clientY);
+});
+
+// ---------- responsive mounting ----------
+const MOUNTS = [];
+function mount(el, render) { MOUNTS.push({ el, render, w: 0 }); }
+function renderVisible(force) {
+  for (const m of MOUNTS) {
+    if (!m.el.isConnected || m.el.offsetParent === null) continue;
+    const w = Math.floor(m.el.clientWidth);
+    if (w && (force || w !== m.w)) { m.w = w; m.el.innerHTML = m.render(w); }
+  }
+}
+let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => renderVisible(false), 120); });
+const el = (tag, attrs = {}, html = "") => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); e.innerHTML = html; return e; };
+const legendHTML = cats => `<div class="legend">${cats.map(k => `<span>${swatch(k.k)}${k.label}</span>`).join("")}</div>`;
+
+// ---------- header ----------
+document.getElementById("sub").innerHTML =
+  `Futures only · positions as of <b>${longDate(D.asOf)}</b>` +
+  (D.changesFrom ? ` · changes vs ${longDate(D.changesFrom)}` : "") +
+  (D.released ? ` · released ${longDate(D.released)}` : "") +
+  ` · ${C.length} contracts`;
+
+// Week picker (hosted site only; the emailed single file has no siblings to link to)
+if (D.archive && D.archive.length > 1) {
+  const wk = document.getElementById("weeks"), latest = D.archive[D.archive.length - 1];
+  wk.innerHTML = `<label for="wsel">Report week</label><select id="wsel">${[...D.archive].reverse().map(d =>
+    `<option value="${d}" ${d === D.asOf ? "selected" : ""}>${longDate(d)}${d === latest ? " (latest)" : ""}</option>`).join("")}</select>`;
+  wk.hidden = false;
+  wk.querySelector("select").onchange = e => { const d = e.target.value; location.href = (d === latest ? "index.html" : d + ".html") + location.hash; };
+}
+
+// ---------- tabs ----------
+const TABS = [{ id: "overview", label: "Overview" }]
+  .concat(REGIONS.map(r => ({ id: r.toLowerCase().replace(/[^a-z]/g, ""), label: r, region: r, n: C.filter(c => c.region === r).length })))
+  .concat([{ id: "all", label: "All contracts", n: C.length }]);
+const nav = document.getElementById("tabs"), panels = document.getElementById("panels");
+for (const t of TABS) {
+  const b = el("button", { role: "tab", "aria-selected": "false", "aria-controls": "p-" + t.id, id: "t-" + t.id, type: "button" }, esc(t.label) + (t.n ? `<span class="n">${t.n}</span>` : ""));
+  b.onclick = () => select(t.id, true);
+  nav.appendChild(b);
+  t.panel = el("section", { class: "panel", id: "p-" + t.id, role: "tabpanel", "aria-labelledby": "t-" + t.id, hidden: "" });
+  panels.appendChild(t.panel);
+}
+function select(id, push) {
+  if (!TABS.some(t => t.id === id)) id = "overview";
+  for (const t of TABS) {
+    const on = t.id === id;
+    document.getElementById("t-" + t.id).setAttribute("aria-selected", on);
+    t.panel.hidden = !on;
+    if (on && !t.built) { t.build(t.panel); t.built = true; }
+  }
+  if (push) history.replaceState(null, "", "#" + id);
+  hideTip();
+  renderVisible(false);
+}
+
+// ---------- Overview ----------
+TABS[0].build = p => {
+  const totOI = sum(C, c => c.oi);
+  const prevTot = hasPrev ? sum(C, c => c.oiChg == null ? null : c.oi - c.oiChg) : null;
+  const withPrev = C.filter(c => c.oiChg != null);
+  const oiDelta = hasPrev ? sum(withPrev, c => c.oiChg) : null;
+  const mmNet = sum(C, c => net(c, "mm")), mmChg = sum(C, c => netChg(c, "mm"));
+  const top = [...C].sort((a, b) => b.oi - a.oi)[0];
+  const nICE = C.filter(c => exShort(c.exchange) === "ICE").length, nNodal = C.filter(c => exShort(c.exchange) === "Nodal").length;
+
+  const tiles = el("div", { class: "tiles" });
+  tiles.innerHTML = [
+    `<div class="card tile"><div class="lab">Total open interest</div><div class="val">${compact(totOI)}</div><div class="d">${hasPrev ? `<span class="${dcls(oiDelta)}">${sgn(oiDelta)}</span> vs ${shortDate(D.prevDate)}` : "contracts, all markets"}</div></div>`,
+    `<div class="card tile"><div class="lab">Contracts reported</div><div class="val">${C.length}</div><div class="d">ICE ${nICE} · Nodal ${nNodal}</div></div>`,
+    `<div class="card tile"><div class="lab">Managed money net</div><div class="val">${sgn(mmNet)}</div><div class="d"><span class="${dcls(mmChg)}">${sgn(mmChg)}</span> on the week</div></div>`,
+    `<div class="card tile"><div class="lab">Largest market</div><div class="val sm">${esc(top.name)}</div><div class="d">${fmt(top.oi)} contracts · ${esc(top.region)}</div></div>`
+  ].join("");
+  p.appendChild(tiles);
+
+  const stack = el("div", { class: "stack", style: "margin-top:16px" });
+  p.appendChild(stack);
+
+  // Region composition
+  const regCard = el("div", { class: "card" }, `<h2>Open interest by region</h2><p class="hint">Long side of open interest, split by who holds it. Hover a bar for the breakdown.</p>${legendHTML(CATS)}`);
+  const regChart = el("div"); regCard.appendChild(regChart); stack.appendChild(regCard);
+  const regRows = REGIONS.map(r => {
+    const cs = C.filter(c => c.region === r), oi = sum(cs, c => c.oi);
+    const segs = CATS.map(k => ({ k: k.k, v: sum(cs, c => v0(c.pos[k.k].l) + v0(c.pos[k.k].sp)) }));
+    let t = `<div class="t">${esc(r)} · ${cs.length} contracts</div>` + row("Open interest", fmt(oi));
+    if (hasPrev) { const d = sum(cs, c => c.oiChg); t += row("Change vs " + shortDate(D.prevDate), `<span class="${dcls(d)}">${sgn(d)}</span>`); }
+    t += "<hr>" + segs.map(g => row(CATS.find(k => k.k === g.k).label, `${fmt(g.v)} · ${pct(g.v / oi * 100)}`, g.k)).join("");
+    return { label: r, segs, total: oi, tip: t };
+  }).sort((a, b) => b.total - a.total);
+  mount(regChart, w => stackedBars(w, regRows, { labelW: 120 }));
+
+  // Top 15 contracts
+  const topCard = el("div", { class: "card" }, `<h2>Largest 15 contracts by open interest</h2><p class="hint">Same split as above. Contract sizes differ by market, so compare within a market type.</p>${legendHTML(CATS)}`);
+  const topChart = el("div"); topCard.appendChild(topChart); stack.appendChild(topCard);
+  const topRows = [...C].sort((a, b) => b.oi - a.oi).slice(0, 15).map(c => ({
+    label: c.name, total: c.oi, tip: contractTip(c),
+    segs: CATS.map(k => ({ k: k.k, v: v0(c.pos[k.k].l) + v0(c.pos[k.k].sp) }))
+  }));
+  mount(topChart, w => stackedBars(w, topRows));
+
+  // Positioning by category
+  let cat = "mm";
+  const posCard = el("div", { class: "card" });
+  posCard.innerHTML = `<h2>Who is long, who is short</h2><p class="hint">Pick a trader category. Left: net position as a share of each market's open interest (the 20 largest markets). Right: the biggest net changes this week.</p>`;
+  const ctr = el("div", { class: "controls" }, `<label>Trader category</label>`);
+  const seg = el("div", { class: "seg", role: "group", "aria-label": "Trader category" });
+  for (const k of TRADERS) {
+    const b = el("button", { type: "button", "aria-pressed": k.k === cat }, swatch(k.k) + k.label);
+    b.onclick = () => { cat = k.k; seg.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); renderVisible(true); };
+    seg.appendChild(b);
+  }
+  ctr.appendChild(seg); posCard.appendChild(ctr);
+  const g2 = el("div", { class: "grid2" });
+  const left = el("div"), right = el("div");
+  g2.append(el("div", {}, `<div class="hint" style="margin-bottom:6px">Net % of open interest</div>`), el("div", {}, `<div class="hint" style="margin-bottom:6px">Net change, contracts</div>`));
+  g2.children[0].appendChild(left); g2.children[1].appendChild(right);
+  posCard.appendChild(g2); stack.appendChild(posCard);
+  const lab = () => TRADERS.find(k => k.k === cat).label;
+  mount(left, w => divergingBars(w, [...C].sort((a, b) => b.oi - a.oi).slice(0, 20).map(c => ({
+    label: c.name, v: netPct(c, cat),
+    tip: `<div class="t">${esc(c.name)}</div>` + row(lab() + " net", `<b>${sgn(net(c, cat))}</b>`, cat) + row("Share of open interest", sgnPct(netPct(c, cat))) + row("Open interest", fmt(c.oi))
+  })), { k: cat, tick: t => t + "%", val: v => sgnPct(v) }));
+  mount(right, w => divergingBars(w, C.filter(c => netChg(c, cat)).sort((a, b) => Math.abs(netChg(b, cat)) - Math.abs(netChg(a, cat))).slice(0, 15).map(c => ({
+    label: c.name, v: netChg(c, cat),
+    tip: `<div class="t">${esc(c.name)}</div>` + row(lab() + " net, now", `<b>${sgn(net(c, cat))}</b>`, cat) + row("Change on the week", `<span class="${dcls(netChg(c, cat))}">${sgn(netChg(c, cat))}</span>`) + row("Long change", sgn(c.chg[cat].l)) + row("Short change", sgn(c.chg[cat].s))
+  })), { k: cat, tick: compact, val: sgn }));
+
+  // Trend
+  const H = D.history || [];
+  const trend = el("div", { class: "card" }, `<h2>Total open interest by report week</h2>`);
+  if (H.length >= 2) {
+    trend.innerHTML += `<p class="hint">All electricity contracts, ${H.length} weeks. Hover for regional detail.</p>`;
+    const pts = H.map(h => ({ x: shortDate(h.date), v: Object.values(h.oi).reduce((a, b) => a + b, 0) }));
+    const box = el("div"); trend.appendChild(box);
+    mount(box, w => lineChart(w, pts, {
+      k: "pm", tip: i => {
+        const h = H[i], byR = {};
+        for (const [code, oi] of Object.entries(h.oi)) { const r = h.region[code]; byR[r] = (byR[r] || 0) + oi; }
+        return `<div class="t">${longDate(h.date)}</div>` + row("Total open interest", `<b>${fmt(pts[i].v)}</b>`) + "<hr>" + REGION_ORDER.filter(r => byR[r]).map(r => row(r, fmt(byR[r]))).join("");
+      }
+    }));
+  } else {
+    trend.innerHTML += `<p class="hint" style="margin:0">Only one week of data so far. Run the builder with <code>--backfill 12</code>, or keep running it weekly, and this chart fills in.</p>`;
+  }
+  stack.appendChild(trend);
+};
+
+// ---------- Region tabs ----------
+function contractCard(c) {
+  const card = el("article", { class: "card ct", id: "c-" + c.code });
+  const oiD = c.oiChg != null ? ` <span class="${dcls(c.oiChg)}">${sgn(c.oiChg)}</span>` : "";
+  card.innerHTML = `<h3>${esc(c.name)}</h3>
+    <div class="tags"><span class="tag">${esc(exShort(c.exchange))}</span><span class="tag">${c.period}</span><span class="tag">${c.tenor}</span>${c.unit ? `<span class="tag">${esc(c.unit)}</span>` : ""}</div>
+    <div class="meta"><span>Open interest <b>${fmt(c.oi)}</b>${oiD}</span><span>Traders <b>${c.traders ?? "—"}</b></span><span>Code ${esc(c.code)}</span></div>`;
+  const chart = el("div"); card.appendChild(chart);
+  mount(chart, w => butterfly(w, c));
+  return card;
+}
+for (const t of TABS.filter(t => t.region)) {
+  t.build = p => {
+    const cs = C.filter(c => c.region === t.region);
+    const oi = sum(cs, c => c.oi), mm = sum(cs, c => net(c, "mm")), pm = sum(cs, c => net(c, "pm"));
+    const tiles = el("div", { class: "tiles" });
+    tiles.innerHTML = [
+      `<div class="card tile"><div class="lab">Open interest</div><div class="val">${compact(oi)}</div><div class="d">${hasPrev ? `<span class="${dcls(sum(cs, c => c.oiChg))}">${sgn(sum(cs, c => c.oiChg))}</span> vs ${shortDate(D.prevDate)}` : `${cs.length} contracts`}</div></div>`,
+      `<div class="card tile"><div class="lab">Producer/Merchant net</div><div class="val">${sgn(pm)}</div><div class="d"><span class="${dcls(sum(cs, c => netChg(c, "pm")))}">${sgn(sum(cs, c => netChg(c, "pm")))}</span> on the week</div></div>`,
+      `<div class="card tile"><div class="lab">Managed money net</div><div class="val">${sgn(mm)}</div><div class="d"><span class="${dcls(sum(cs, c => netChg(c, "mm")))}">${sgn(sum(cs, c => netChg(c, "mm")))}</span> on the week</div></div>`
+    ].join("");
+    p.appendChild(tiles);
+    const ctr = el("div", { class: "controls", style: "margin-top:16px" });
+    ctr.innerHTML = `<label for="s-${t.id}">Sort</label><select id="s-${t.id}"><option value="oi">Open interest</option><option value="name">Name</option><option value="mm">Managed money net % OI</option><option value="chg">Biggest weekly move</option></select>
+      <label for="f-${t.id}">Show</label><select id="f-${t.id}"><option value="">All</option><option value="Peak">Peak</option><option value="Off-peak">Off-peak</option></select>`;
+    p.appendChild(ctr);
+    p.appendChild(el("div", {}, legendHTML(CATS) + `<p class="hint" style="margin:-2px 0 12px">Bars: outright short (left) and long (right) positions. Hover a row for spreading, % of OI and trader counts.</p>`));
+    const grid = el("div", { class: "cards" }); p.appendChild(grid);
+    const cards = new Map(cs.map(c => [c.code, contractCard(c)]));
+    const move = c => Math.max(...TRADERS.map(k => Math.abs(netChg(c, k.k) || 0)));
+    const draw = () => {
+      const by = ctr.querySelector("select").value, f = ctr.querySelectorAll("select")[1].value;
+      const sorted = cs.filter(c => !f || c.period === f).sort(
+        by === "name" ? (a, b) => a.name.localeCompare(b.name) :
+        by === "mm" ? (a, b) => netPct(b, "mm") - netPct(a, "mm") :
+        by === "chg" ? (a, b) => move(b) - move(a) : (a, b) => b.oi - a.oi);
+      grid.replaceChildren(...sorted.map(c => cards.get(c.code)));
+      renderVisible(false);
+    };
+    ctr.querySelectorAll("select").forEach(s => s.onchange = draw);
+    draw();
+  };
+}
+
+// ---------- All contracts ----------
+TABS[TABS.length - 1].build = p => {
+  const ctr = el("div", { class: "controls" });
+  ctr.innerHTML = `<input type="search" placeholder="Search contracts" aria-label="Search contracts">
+    <label for="ar">Region</label><select id="ar"><option value="">All</option>${REGIONS.map(r => `<option>${r}</option>`).join("")}</select>
+    <label for="ae">Exchange</label><select id="ae"><option value="">All</option><option>ICE</option><option>Nodal</option></select>`;
+  p.appendChild(ctr);
+  const cols = [
+    { h: "Contract", f: c => c.name, l: 1 },
+    { h: "Region", f: c => c.region, l: 1 },
+    { h: "Exch.", f: c => exShort(c.exchange), l: 1 },
+    { h: "Open interest", f: c => c.oi, n: fmt },
+    ...(hasPrev ? [{ h: "OI Δ", f: c => c.oiChg, n: sgn, d: 1 }] : []),
+    { h: "Prod/Merch net", f: c => net(c, "pm"), n: sgn },
+    { h: "Swap net", f: c => net(c, "swap"), n: sgn },
+    { h: "Mgd money net", f: c => net(c, "mm"), n: sgn },
+    { h: "MM Δ week", f: c => netChg(c, "mm"), n: sgn, d: 1 },
+    { h: "Other net", f: c => net(c, "other"), n: sgn },
+    { h: "MM % OI", f: c => netPct(c, "mm"), n: sgnPct },
+    { h: "Traders", f: c => c.traders, n: fmt }
+  ];
+  let sortI = 3, dir = -1;
+  const wrap = el("div", { class: "tblwrap" }), tbl = el("table");
+  wrap.appendChild(tbl); p.appendChild(wrap);
+  const note = el("p", { class: "hint", style: "margin-top:8px" }, "Click a column to sort; click a row to open that contract's chart.");
+  p.appendChild(note);
+  const draw = () => {
+    const q = ctr.querySelector("input").value.trim().toLowerCase(), r = ctr.querySelector("#ar").value, x = ctr.querySelector("#ae").value;
+    const rows = C.filter(c => (!q || c.name.toLowerCase().includes(q) || c.code.includes(q)) && (!r || c.region === r) && (!x || exShort(c.exchange) === x))
+      .sort((a, b) => { const A = cols[sortI].f(a), B = cols[sortI].f(b); return (typeof A === "string" ? A.localeCompare(B) : (A ?? -Infinity) - (B ?? -Infinity)) * dir; });
+    tbl.innerHTML = `<thead><tr>${cols.map((c, i) => `<th class="${c.l ? "l" : ""}" data-i="${i}" ${i === sortI ? `aria-sort="${dir > 0 ? "ascending" : "descending"}"` : ""}>${c.h}</th>`).join("")}</tr></thead>
+      <tbody>${rows.map(c => `<tr data-code="${esc(c.code)}">${cols.map(k => { const v = k.f(c); return `<td class="${k.l ? "l" : ""} ${k.d ? dcls(v) : ""}">${k.n ? k.n(v) : esc(v)}</td>`; }).join("")}</tr>`).join("")}</tbody>`;
+    if (!rows.length) tbl.innerHTML += `<tbody><tr><td colspan="${cols.length}" class="empty">No contracts match.</td></tr></tbody>`;
+  };
+  tbl.addEventListener("click", e => {
+    const th = e.target.closest("th");
+    if (th) { const i = +th.dataset.i; dir = i === sortI ? -dir : (cols[i].l ? 1 : -1); sortI = i; draw(); return; }
+    const tr = e.target.closest("tr[data-code]");
+    if (tr) openContract(tr.dataset.code);
+  });
+  ctr.addEventListener("input", draw);
+  draw();
+};
+function openContract(code) {
+  const c = byCode[code], t = TABS.find(t => t.region === c.region);
+  select(t.id, true);
+  const sel = t.panel.querySelectorAll("select")[1]; if (sel && sel.value) { sel.value = ""; sel.onchange(); }
+  const card = document.getElementById("c-" + code);
+  card.scrollIntoView({ behavior: "smooth", block: "center" });
+  card.classList.add("flash"); setTimeout(() => card.classList.remove("flash"), 1800);
+}
+
+// ---------- footer ----------
+document.getElementById("foot").innerHTML = `
+  <dl>
+    <dt>Producer/Merchant</dt><dd>Producers, merchants, processors and users of physical power hedging with futures.</dd>
+    <dt>Swap dealers</dt><dd>Firms dealing mainly in swaps, using futures to offset that risk.</dd>
+    <dt>Managed money</dt><dd>CTAs, CPOs and funds trading on behalf of clients.</dd>
+    <dt>Other reportables</dt><dd>All other traders large enough to report.</dd>
+    <dt>Non-reportable</dt><dd>Positions below the reporting level, worked out here as open interest minus reportable positions.</dd>
+  </dl>
+  <p>Net = long − short (outright only; spreading positions are equal long and short). "—" means CFTC withheld or didn't report the figure. Open interest is in contracts, and contract size varies by market (see each card's tags), so cross-market totals are a guide, not a like-for-like sum.</p>
+  <p>Source: <a href="${esc(D.source)}">${esc(D.source)}</a> · CFTC Disaggregated Commitments of Traders, electricity, futures only · built ${esc(D.generated)}</p>`;
+
+// ---------- theme toggle (works in an emailed file; no storage needed) ----------
+document.getElementById("themeBtn").onclick = () => {
+  const r = document.documentElement, dark = r.dataset.theme ? r.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  r.dataset.theme = dark ? "light" : "dark";
+};
+
+select((location.hash || "#overview").slice(1), false);
+</script>
+</body>
+</html>
